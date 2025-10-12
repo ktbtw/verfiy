@@ -1,0 +1,396 @@
+#!/bin/bash
+# xyz验证 - 一键部署脚本
+# Author: ktbtw
+# Usage: ./deploy-xyz.sh [frontend|backend|all]
+
+set -e  # 遇到错误立即退出
+
+# ==================== 配置区 ====================
+# 服务器配置
+SERVER_USER="root"
+SERVER_HOST="your_server_ip"  # 修改为你的服务器 IP 地址
+SSH_KEY="/path/to/your/ssh_key.pem"  # 修改为你的 SSH 密钥路径
+
+# 统一备份目录
+BACKUP_DIR="/www/wwwroot/backup"
+
+# 前端配置
+FRONTEND_DIR="/path/to/verfiy_client"  # 修改为你的前端项目路径
+FRONTEND_TARGET_DIR="/www/wwwroot/your_domain"  # 修改为你的域名目录
+FRONTEND_BACKUP_DIR="$BACKUP_DIR/frontend"  # 前端备份目录
+
+# 后端配置
+BACKEND_DIR="/path/to/verfiy_server"  # 修改为你的后端项目路径
+BACKEND_JAR="verify.jar"
+BACKEND_TARGET_DIR="/www/wwwroot"
+BACKEND_SERVICE_NAME="verify"  # 宝塔Java项目名称
+BACKEND_BACKUP_DIR="$BACKUP_DIR/backend"  # 后端备份目录
+BACKEND_LOG_FILE="/www/wwwlogs/java/springboot/verify.log"  # 日志文件路径
+
+# ==================== 颜色输出 ====================
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# ==================== 工具函数 ====================
+log_info() {
+    echo -e "${CYAN}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+log_step() {
+    echo -e "\n${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${PURPLE}  $1${NC}"
+    echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+}
+
+# SSH 命令封装
+ssh_exec() {
+    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "$1"
+}
+
+# 检查SSH密钥权限
+check_ssh_key() {
+    log_info "检查SSH密钥权限..."
+    if [ ! -f "$SSH_KEY" ]; then
+        log_error "SSH密钥文件不存在: $SSH_KEY"
+        exit 1
+    fi
+    
+    # 修复权限
+    chmod 600 "$SSH_KEY"
+    log_success "SSH密钥权限已设置为 600"
+}
+
+# ==================== 前端部署 ====================
+deploy_frontend() {
+    log_step "🎨 开始部署前端"
+    
+    # 1. 检查前端目录
+    if [ ! -d "$FRONTEND_DIR" ]; then
+        log_error "前端目录不存在: $FRONTEND_DIR"
+        exit 1
+    fi
+    
+    cd "$FRONTEND_DIR"
+    log_info "当前目录: $(pwd)"
+    
+    # 2. 清理旧的构建文件
+    log_info "清理旧的构建文件..."
+    if [ -d "dist" ]; then
+        rm -rf dist
+        log_success "旧构建文件已清理"
+    fi
+    
+    # 3. 安装依赖（如果需要）
+    if [ ! -d "node_modules" ]; then
+        log_info "安装前端依赖..."
+        npm install
+        log_success "依赖安装完成"
+    fi
+    
+    # 4. 构建前端项目
+    log_info "构建前端项目..."
+    npm run build
+    log_success "前端构建完成"
+    
+    # 5. 检查构建产物
+    if [ ! -d "dist" ]; then
+        log_error "构建失败：dist 目录不存在"
+        exit 1
+    fi
+    
+    log_info "构建产物大小: $(du -sh dist | cut -f1)"
+    
+    # 6. 备份服务器上的旧文件
+    log_info "备份服务器上的旧前端文件..."
+    FRONTEND_BACKUP_NAME="frontend_$(date +%Y%m%d_%H%M%S)"
+    ssh_exec "mkdir -p $FRONTEND_BACKUP_DIR" || true
+    ssh_exec "[ -d $FRONTEND_TARGET_DIR ] && tar -czf $FRONTEND_BACKUP_DIR/${FRONTEND_BACKUP_NAME}.tar.gz -C $(dirname $FRONTEND_TARGET_DIR) $(basename $FRONTEND_TARGET_DIR) 2>/dev/null || echo 'No backup needed'" || true
+    log_success "备份完成: $FRONTEND_BACKUP_DIR/${FRONTEND_BACKUP_NAME}.tar.gz"
+    
+    # 清理超过7天的旧备份
+    log_info "清理7天前的旧备份..."
+    ssh_exec "find $FRONTEND_BACKUP_DIR -name 'frontend_*.tar.gz' -mtime +7 -delete 2>/dev/null || true" || true
+    
+    # 7. 上传新文件
+    log_info "上传前端文件到服务器..."
+    rsync -avz --delete \
+        --exclude='.user.ini' \
+        -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+        dist/ \
+        "$SERVER_USER@$SERVER_HOST:$FRONTEND_TARGET_DIR/"
+    log_success "前端文件上传完成"
+    
+    # 8. 验证部署
+    log_info "验证前端部署..."
+    if ssh_exec "[ -f $FRONTEND_TARGET_DIR/index.html ]"; then
+        log_success "前端部署验证成功"
+    else
+        log_error "前端部署验证失败"
+        exit 1
+    fi
+    
+    log_step "✅ 前端部署完成！"
+}
+
+# ==================== 后端部署 ====================
+deploy_backend() {
+    log_step "🚀 开始部署后端"
+    
+    # 1. 检查后端目录
+    if [ ! -d "$BACKEND_DIR" ]; then
+        log_error "后端目录不存在: $BACKEND_DIR"
+        exit 1
+    fi
+    
+    cd "$BACKEND_DIR"
+    log_info "当前目录: $(pwd)"
+    
+    # 2. 构建后端项目
+    log_info "构建后端项目..."
+    mvn clean package -DskipTests
+    log_success "后端构建完成"
+    
+    # 3. 检查构建产物
+    JAR_PATH="target/$BACKEND_JAR"
+    if [ ! -f "$JAR_PATH" ]; then
+        log_error "构建失败：JAR文件不存在 ($JAR_PATH)"
+        exit 1
+    fi
+    
+    log_info "JAR文件大小: $(du -sh $JAR_PATH | cut -f1)"
+    
+    # 4. 备份服务器上的旧JAR
+    log_info "备份服务器上的旧JAR文件..."
+    BACKUP_JAR="verify_$(date +%Y%m%d_%H%M%S).jar"
+    ssh_exec "mkdir -p $BACKEND_BACKUP_DIR" || true
+    ssh_exec "[ -f $BACKEND_TARGET_DIR/$BACKEND_JAR ] && cp $BACKEND_TARGET_DIR/$BACKEND_JAR $BACKEND_BACKUP_DIR/$BACKUP_JAR || echo 'No backup needed'" || true
+    log_success "备份完成: $BACKEND_BACKUP_DIR/$BACKUP_JAR"
+    
+    # 清理超过7天的旧备份
+    log_info "清理7天前的旧备份..."
+    ssh_exec "find $BACKEND_BACKUP_DIR -name 'verify_*.jar' -mtime +7 -delete 2>/dev/null || true" || true
+    
+    # 5. 停止后端服务
+    log_info "停止后端服务..."
+    # 尝试通过宝塔API停止（如果配置了）
+    ssh_exec "pkill -f '$BACKEND_JAR' || echo 'Service not running'" || true
+    sleep 2
+    log_success "后端服务已停止"
+    
+    # 6. 上传新JAR
+    log_info "上传后端JAR到服务器..."
+    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no \
+        "$JAR_PATH" \
+        "$SERVER_USER@$SERVER_HOST:$BACKEND_TARGET_DIR/$BACKEND_JAR"
+    log_success "后端JAR上传完成"
+    
+    # 7. 启动后端服务
+    log_info "启动后端服务..."
+    # 使用宝塔的Java路径并输出日志到文件
+    JAVA_PATH="/www/server/java/jdk-17.0.8/bin/java"
+    
+    # 确保日志目录存在
+    ssh_exec "mkdir -p $(dirname $BACKEND_LOG_FILE)" || true
+    
+    # 创建启动脚本
+    log_info "创建启动脚本..."
+    ssh_exec "cat > $BACKEND_TARGET_DIR/start.sh << 'EOFSCRIPT'
+#!/bin/bash
+cd $BACKEND_TARGET_DIR
+nohup $JAVA_PATH -jar -Xmx1024M -Xms256M $BACKEND_JAR > $BACKEND_LOG_FILE 2>&1 < /dev/null &
+echo \$! > $BACKEND_TARGET_DIR/verify.pid
+EOFSCRIPT"
+    
+    ssh_exec "chmod +x $BACKEND_TARGET_DIR/start.sh"
+    
+    # 使用 at 命令立即执行启动脚本（确保完全脱离当前会话）
+    log_info "使用 at 命令启动服务..."
+    ssh_exec "echo 'bash $BACKEND_TARGET_DIR/start.sh' | at now 2>/dev/null || bash $BACKEND_TARGET_DIR/start.sh &"
+    log_info "等待服务启动..."
+    sleep 5
+    
+    # 8. 验证服务启动
+    log_info "验证后端服务启动..."
+    if ssh_exec "ps aux | grep -v grep | grep '$BACKEND_JAR' > /dev/null"; then
+        log_success "后端服务启动成功"
+        # 显示进程信息
+        ssh_exec "ps aux | grep -v grep | grep '$BACKEND_JAR' | head -1"
+    else
+        log_error "后端服务启动失败"
+        log_error "查看日志: ssh -i $SSH_KEY root@$SERVER_HOST \"tail -50 $BACKEND_LOG_FILE\""
+        # 显示最后20行日志
+        log_info "最后20行日志："
+        ssh_exec "tail -20 $BACKEND_LOG_FILE" || true
+        exit 1
+    fi
+    
+    # 9. 检查端口监听
+    log_info "检查端口8084监听状态..."
+    sleep 3
+    if ssh_exec "netstat -tulnp | grep 8084 > /dev/null"; then
+        log_success "端口8084监听正常"
+    else
+        log_warning "端口8084未监听，服务可能需要更多时间启动"
+        log_info "查看日志: ssh -i $SSH_KEY root@$SERVER_HOST \"tail -50 $BACKEND_LOG_FILE\""
+        # 显示最后20行日志
+        log_info "最后20行日志："
+        ssh_exec "tail -20 $BACKEND_LOG_FILE" || true
+    fi
+    
+    log_step "✅ 后端部署完成！"
+}
+
+# ==================== 显示使用帮助 ====================
+show_usage() {
+    cat << EOF
+${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}
+${CYAN}  xyz验证 - 一键部署脚本${NC}
+${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}
+
+${GREEN}用法:${NC}
+  ./deploy-xyz.sh [选项]
+
+${GREEN}选项:${NC}
+  ${YELLOW}frontend${NC}    仅部署前端
+  ${YELLOW}backend${NC}     仅部署后端
+  ${YELLOW}all${NC}         部署前端和后端（默认）
+
+${GREEN}示例:${NC}
+  ./deploy-xyz.sh frontend    # 只部署前端
+  ./deploy-xyz.sh backend     # 只部署后端
+  ./deploy-xyz.sh             # 部署前后端
+
+${GREEN}配置:${NC}
+  服务器: ${BLUE}$SERVER_HOST${NC}
+  前端目录: ${BLUE}$FRONTEND_TARGET_DIR${NC}
+  后端目录: ${BLUE}$BACKEND_TARGET_DIR${NC}
+  备份目录: ${BLUE}$BACKUP_DIR${NC}
+    - 前端备份: ${BLUE}$FRONTEND_BACKUP_DIR${NC}
+    - 后端备份: ${BLUE}$BACKEND_BACKUP_DIR${NC}
+  日志文件: ${BLUE}$BACKEND_LOG_FILE${NC}
+
+${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}
+EOF
+}
+
+# ==================== 显示部署信息 ====================
+show_deployment_info() {
+    echo ""
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}  🎉 部署完成！${NC}"
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "${CYAN}📱 访问地址:${NC}"
+    echo -e "  前端: ${BLUE}https://www.xyapi.top${NC}"
+    echo -e "  后端: ${BLUE}https://www.xyapi.top/verfiy/api/${NC}"
+    echo ""
+    echo -e "${CYAN}👤 默认账号:${NC}"
+    echo -e "  用户名: ${YELLOW}admin${NC}"
+    echo -e "  密码: ${YELLOW}请查看数据库初始化脚本${NC}"
+    echo ""
+    echo -e "${CYAN}📊 服务状态:${NC}"
+    ssh_exec "ps aux | grep -v grep | grep '$BACKEND_JAR' | awk '{print \"  进程PID: \" \$2 \" | CPU: \" \$3 \"% | 内存: \" \$4 \"%\"}' | head -1"
+    echo ""
+    echo -e "${CYAN}📦 备份目录:${NC}"
+    echo -e "  主目录: ${BLUE}$BACKUP_DIR${NC}"
+    echo ""
+    echo -e "  前端备份 (${BLUE}$FRONTEND_BACKUP_DIR${NC}):"
+    ssh_exec "ls -lh $FRONTEND_BACKUP_DIR/*.tar.gz 2>/dev/null | tail -3 | awk '{print \"    \" \$9 \" (\" \$5 \")\"}' || echo '    暂无备份'" || echo "    暂无备份"
+    echo ""
+    echo -e "  后端备份 (${BLUE}$BACKEND_BACKUP_DIR${NC}):"
+    ssh_exec "ls -lh $BACKEND_BACKUP_DIR/*.jar 2>/dev/null | tail -3 | awk '{print \"    \" \$9 \" (\" \$5 \")\"}' || echo '    暂无备份'" || echo "    暂无备份"
+    echo ""
+    echo -e "${CYAN}🔍 查看日志:${NC}"
+    echo -e "  后端日志: ${BLUE}ssh -i $SSH_KEY root@$SERVER_HOST \"tail -f $BACKEND_LOG_FILE\"${NC}"
+    echo ""
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+}
+
+# ==================== 主函数 ====================
+main() {
+    clear
+    echo -e "${PURPLE}"
+    cat << "EOF"
+    ╔═══════════════════════════════════════╗
+    ║                                       ║
+    ║        xyz验证 - 部署脚本            ║
+    ║                                       ║
+    ╚═══════════════════════════════════════╝
+EOF
+    echo -e "${NC}"
+    
+    # 解析参数
+    DEPLOY_MODE="${1:-all}"
+    
+    case "$DEPLOY_MODE" in
+        frontend)
+            log_info "部署模式: 仅前端"
+            ;;
+        backend)
+            log_info "部署模式: 仅后端"
+            ;;
+        all)
+            log_info "部署模式: 前端 + 后端"
+            ;;
+        help|--help|-h)
+            show_usage
+            exit 0
+            ;;
+        *)
+            log_error "未知选项: $DEPLOY_MODE"
+            show_usage
+            exit 1
+            ;;
+    esac
+    
+    # 记录开始时间
+    START_TIME=$(date +%s)
+    
+    # 检查SSH密钥
+    check_ssh_key
+    
+    # 执行部署
+    case "$DEPLOY_MODE" in
+        frontend)
+            deploy_frontend
+            ;;
+        backend)
+            deploy_backend
+            ;;
+        all)
+            deploy_frontend
+            deploy_backend
+            ;;
+    esac
+    
+    # 计算耗时
+    END_TIME=$(date +%s)
+    DURATION=$((END_TIME - START_TIME))
+    
+    log_success "总耗时: ${DURATION}秒"
+    
+    # 显示部署信息
+    show_deployment_info
+}
+
+# ==================== 脚本入口 ====================
+main "$@"
+

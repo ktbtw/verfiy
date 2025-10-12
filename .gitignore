@@ -1,0 +1,41 @@
+# xyz验证 - 根目录配置
+# Author: ktbtw
+
+# 部署配置（使用 deploy.sh.example 作为模板）
+deploy.sh
+
+# SSH 密钥文件
+*.pem
+*.key
+*.ppk
+id_rsa*
+
+# 数据库文件
+data/
+*.db
+*.mv.db
+*.sql.gz
+database-schema.sql
+
+# 备份文件
+*.tar.gz
+backups/
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
+
+# 临时文件
+*.tmp
+*.bak
+*.swp
+
+# Nginx 配置（可能包含域名信息）
+nginx_*.conf
+
+# 测试脚本（可能包含敏感信息）
+test-*.js
+
