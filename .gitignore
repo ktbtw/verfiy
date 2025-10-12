@@ -10,12 +10,12 @@ deploy.sh
 *.ppk
 id_rsa*
 
-# 数据库文件
-data/
+# 数据库文件（排除结构文件）
+verfiy_server/data/*.db
+verfiy_server/data/*.mv.db
 *.db
 *.mv.db
 *.sql.gz
-database-schema.sql
 
 # 备份文件
 *.tar.gz
