@@ -122,10 +122,21 @@ CREATE TABLE `notice` (
   KEY `idx_app_id` (`app_id`),
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='公告表';
--- ----------------------------
--- 邀请表: notice (公告表)
--- ----------------------------
 
+
+-- ----------------------------
+-- 邀请表: invite_codes (公告表)
+-- ----------------------------
+DROP TABLE IF EXISTS `invite_codes`;
+CREATE TABLE invite_codes (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  code VARCHAR(64) NOT NULL UNIQUE,
+  created_by VARCHAR(64) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  used TINYINT(1) NOT NULL DEFAULT 0,
+  used_by VARCHAR(64) DEFAULT NULL,
+  used_at DATETIME DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ----------------------------
 -- 创建默认管理员账户
