@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xy.verfiy.mapper.CardMapper">
+    <resultMap id="CardResult" type="com.xy.verfiy.domain.Card">
+        <id property="id" column="id" />
+        <result property="appId" column="app_id" />
+        <result property="cardCode" column="card_code" />
+        <result property="status" column="status" javaType="com.xy.verfiy.domain.CardStatus" />
+        <result property="expireAt" column="expire_at" />
+        <result property="activatedAt" column="activated_at" />
+        <result property="disabled" column="disabled" />
+        <result property="metadata" column="metadata" />
+        <result property="maxMachines" column="max_machines" />
+        <result property="extra" column="extra" />
+        <result property="returnExtra" column="return_extra" />
+        <result property="createdAt" column="created_at" />
+        <result property="updatedAt" column="updated_at" />
+    </resultMap>
+
+    <select id="findById" parameterType="long" resultMap="CardResult">
+        SELECT * FROM card WHERE id = #{id}
+    </select>
+
+    <select id="findByCode" parameterType="string" resultMap="CardResult">
+        SELECT * FROM card WHERE card_code = #{code}
+    </select>
+
+    <select id="pageQuery" resultMap="CardResult">
+        SELECT * FROM card
+        <where>
+            <if test="appId != null">
+                app_id = #{appId}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (card_code LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(1) FROM card
+        <where>
+            <if test="appId != null">
+                app_id = #{appId}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (card_code LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <insert id="insertBatch">
+        INSERT INTO card(app_id, card_code, status, expire_at, activated_at, disabled, metadata, max_machines, extra, return_extra, created_at, updated_at)
+        VALUES
+        <foreach collection="cards" item="c" separator="," >
+            (#{c.appId}, #{c.cardCode}, #{c.status}, #{c.expireAt}, #{c.activatedAt}, #{c.disabled}, #{c.metadata}, #{c.maxMachines}, #{c.extra}, #{c.returnExtra}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        </foreach>
+    </insert>
+
+    <update id="updateStatus">
+        UPDATE card SET status = #{status}, updated_at = #{updatedAt} WHERE id = #{id}
+    </update>
+
+    <update id="updateStatusAndActivatedAtIfNull">
+        UPDATE card
+        SET status = #{status},
+            activated_at = COALESCE(activated_at, #{activatedAt}),
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatusActivatedAndExpireIfNull">
+        UPDATE card
+        SET status = #{status},
+            activated_at = COALESCE(activated_at, #{activatedAt}),
+            expire_at = COALESCE(expire_at, #{expireAt}),
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateDisabled">
+        UPDATE card SET disabled = #{disabled}, updated_at = #{updatedAt} WHERE id = #{id}
+    </update>
+
+    <update id="updateExtra">
+        UPDATE card SET extra = #{extra}, return_extra = #{returnExtra}, updated_at = CURRENT_TIMESTAMP WHERE id = #{id}
+    </update>
+
+    <delete id="deleteByIdAndAppId">
+        DELETE FROM card WHERE id = #{id} AND (#{appId} IS NULL OR app_id = #{appId})
+    </delete>
+
+    <!-- machine bindings -->
+    <select id="existsMachine" resultType="int">
+        SELECT 1 FROM card_machine WHERE card_id = #{cardId} AND machine = #{machine} LIMIT 1
+    </select>
+    <insert id="insertMachine">
+        INSERT INTO card_machine(card_id, machine) VALUES(#{cardId}, #{machine})
+    </insert>
+    <select id="countMachines" resultType="int">
+        SELECT COUNT(1) FROM card_machine WHERE card_id = #{cardId}
+    </select>
+    <select id="listMachines" resultType="string">
+        SELECT machine FROM card_machine WHERE card_id = #{cardId} ORDER BY id DESC
+    </select>
+
+    <delete id="deleteMachinesByCardId">
+        DELETE FROM card_machine WHERE card_id = #{cardId}
+    </delete>
+
+    <delete id="deleteMachine">
+        DELETE FROM card_machine WHERE card_id = #{cardId} AND machine = #{machine}
+    </delete>
+</mapper>
+
+

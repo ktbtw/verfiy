@@ -1,0 +1,81 @@
+# xyz验证 - 后端项目
+# Author: ktbtw
+
+# Maven
+target/
+.mvn/
+mvnw
+mvnw.cmd
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# Gradle
+.gradle/
+gradle/
+gradlew
+gradlew.bat
+build/
+
+# IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Eclipse
+.settings/
+.classpath
+.project
+bin/
+
+# VS Code
+.vscode/
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+logs/
+spring.log
+
+# 临时文件
+*.tmp
+*.bak
+*.swp
+*~.nib
+*.class
+
+# JVM crash logs
+hs_err_pid*
+
+# 数据库
+*.db
+*.sqlite
+*.sqlite3
+
+# 敏感配置（推荐使用 application.properties.example）
+src/main/resources/application.properties
+application-local.properties
+application-dev.properties
+application-prod.properties
+
+# 证书文件
+src/main/resources/jks/*.jks
+src/main/resources/jks/*.p12
+*.pem
+*.key
+*.crt
+
+# 密码文件
+*password*.txt
+*secret*.txt
+
+# 备份
+*.sql.gz
+backups/

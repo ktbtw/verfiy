@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xy.verfiy.mapper.ApplicationMapper">
+    <resultMap id="AppResult" type="com.xy.verfiy.domain.Application">
+        <id property="id" column="id" />
+        <result property="name" column="name" />
+        <result property="description" column="description" />
+        <result property="owner" column="owner" />
+        <result property="icon" column="icon" />
+        <result property="secure" column="secure" />
+        <result property="encryptionAlg" column="encryption_alg" />
+        <result property="apiKey" column="api_key" />
+        <result property="secretKey" column="secret_key" />
+        
+        <result property="announcement" column="announcement" />
+        <result property="version" column="version" />
+        <result property="changelog" column="changelog" />
+        <result property="createdAt" column="created_at" />
+        <result property="redeemExtra" column="redeem_extra" />
+        <result property="redeemExtraMode" column="redeem_extra_mode" />
+    </resultMap>
+
+    <insert id="insert" parameterType="com.xy.verfiy.domain.Application" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO application(
+            name, description, owner,
+            api_key, secret_key,
+            secure, encryption_alg,
+            created_at, redeem_extra_mode
+        ) VALUES(
+            #{name}, #{description}, #{owner},
+            #{apiKey}, #{secretKey},
+            #{secure}, #{encryptionAlg},
+            NOW(), #{redeemExtraMode}
+        )
+    </insert>
+
+    <select id="listByOwner" resultMap="AppResult">
+        SELECT * FROM application WHERE owner = #{owner} ORDER BY id DESC
+    </select>
+
+    <select id="findById" resultMap="AppResult">
+        SELECT * FROM application WHERE id = #{id}
+    </select>
+
+    <select id="findByApiKey" resultMap="AppResult">
+        SELECT * FROM application WHERE api_key = #{apiKey}
+    </select>
+
+    <update id="update" parameterType="com.xy.verfiy.domain.Application">
+        UPDATE application
+        <set>
+            <if test="name != null">name = #{name},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="icon != null">icon = #{icon},</if>
+            <if test="secure != null">secure = #{secure},</if>
+            <if test="encryptionAlg != null">encryption_alg = #{encryptionAlg},</if>
+            <if test="apiKey != null">api_key = #{apiKey},</if>
+            <if test="secretKey != null">secret_key = #{secretKey},</if>
+            
+            <if test="announcement != null">announcement = #{announcement},</if>
+            <if test="version != null">version = #{version},</if>
+            <if test="changelog != null">changelog = #{changelog},</if>
+            <!-- 允许清空 redeemExtra（包括空字符串） -->
+            <if test="redeemExtra != null">redeem_extra = #{redeemExtra},</if>
+            <if test="redeemExtraMode != null">redeem_extra_mode = #{redeemExtraMode},</if>
+            <!-- 使用一个始终为 true 的条件确保 SET 子句不为空 -->
+            <if test="true">id = #{id}</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM application WHERE id = #{id}
+    </delete>
+</mapper>
+
+

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xy.verfiy.mapper.UserAccountMapper">
+    <resultMap id="UserResult" type="com.xy.verfiy.domain.UserAccount">
+        <id property="id" column="id" />
+        <result property="username" column="username" />
+        <result property="password" column="password" />
+        <result property="enabled" column="enabled" />
+        <result property="createdAt" column="created_at" />
+        <result property="canInvite" column="can_invite" />
+        <result property="inviteQuota" column="invite_quota" />
+    </resultMap>
+
+    <select id="findByUsername" parameterType="string" resultMap="UserResult">
+        SELECT * FROM users WHERE username = #{username}
+    </select>
+
+    <select id="findAll" resultMap="UserResult">
+        SELECT * FROM users ORDER BY created_at DESC
+    </select>
+
+    <insert id="insert" parameterType="com.xy.verfiy.domain.UserAccount" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO users(username, password, enabled, created_at, can_invite, invite_quota)
+        VALUES(#{username}, #{password}, #{enabled}, NOW(), 
+               COALESCE(#{canInvite}, FALSE), COALESCE(#{inviteQuota}, 0))
+    </insert>
+
+    <update id="updateInvitePermission">
+        UPDATE users 
+        SET can_invite = #{canInvite}, 
+            invite_quota = #{inviteQuota}
+        WHERE username = #{username}
+    </update>
+</mapper>
+
+

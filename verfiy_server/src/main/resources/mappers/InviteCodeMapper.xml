@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xy.verfiy.mapper.InviteCodeMapper">
+    <resultMap id="InviteResult" type="com.xy.verfiy.domain.InviteCode">
+        <id property="id" column="id" />
+        <result property="code" column="code" />
+        <result property="createdBy" column="created_by" />
+        <result property="createdAt" column="created_at" />
+        <result property="used" column="used" />
+        <result property="usedBy" column="used_by" />
+        <result property="usedAt" column="used_at" />
+    </resultMap>
+
+    <insert id="insert" parameterType="com.xy.verfiy.domain.InviteCode" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO invite_codes(code, created_by, created_at, used)
+        VALUES(#{code}, #{createdBy}, NOW(), false)
+    </insert>
+
+    <select id="findByCode" parameterType="string" resultMap="InviteResult">
+        SELECT * FROM invite_codes WHERE code = #{code}
+    </select>
+
+    <update id="markUsed">
+        UPDATE invite_codes
+        SET used = true, used_by = #{usedBy}, used_at = NOW()
+        WHERE code = #{code} AND used = false
+    </update>
+
+    <select id="listAll" resultMap="InviteResult">
+        SELECT * FROM invite_codes ORDER BY id DESC
+    </select>
+
+    <select id="listByCreator" parameterType="string" resultMap="InviteResult">
+        SELECT * FROM invite_codes WHERE created_by = #{creator} ORDER BY id DESC
+    </select>
+
+    <delete id="deleteByCode" parameterType="string">
+        DELETE FROM invite_codes WHERE code = #{code}
+    </delete>
+
+    <select id="countByCreator" parameterType="string" resultType="int">
+        SELECT COUNT(*) FROM invite_codes WHERE created_by = #{creator}
+    </select>
+</mapper>
+
+

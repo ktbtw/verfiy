@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xy.verfiy.mapper.CardUseLogMapper">
+    <resultMap id="LogResult" type="com.xy.verfiy.domain.CardUseLog">
+        <id property="id" column="id" />
+        <result property="cardId" column="card_id" />
+        <result property="cardCode" column="card_code" />
+        <result property="action" column="action" />
+        <result property="requestIp" column="request_ip" />
+        <result property="requestUser" column="request_user" />
+        <result property="remark" column="remark" />
+        <result property="createdAt" column="created_at" />
+    </resultMap>
+
+    <insert id="insert" parameterType="com.xy.verfiy.domain.CardUseLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO card_use_log(card_id, card_code, action, request_ip, request_user, remark, created_at)
+        VALUES(#{cardId}, #{cardCode}, #{action}, #{requestIp}, #{requestUser}, #{remark}, CURRENT_TIMESTAMP)
+    </insert>
+
+    <select id="listByCardId" resultMap="LogResult">
+        SELECT * FROM card_use_log WHERE card_id = #{cardId} ORDER BY id DESC
+    </select>
+
+    <delete id="deleteByCardId">
+        DELETE FROM card_use_log WHERE card_id = #{cardId}
+    </delete>
+</mapper>
+
+
