@@ -42,7 +42,7 @@ async function submit() {
         if (authCheck.ok) {
           const authData = await authCheck.json()
           if (authData.authenticated) {
-            console.log('[Login] 登录成功，CSRF Token会在下次请求时自动获取')
+            // 登录成功
             // 显式拉取一次 CSRF Token，确保后续 POST 不会 403
             await fetch('/verfiy/api/csrf-token', { credentials: 'include' }).catch(() => {})
             // 确认已认证，跳转到目标页面或主页

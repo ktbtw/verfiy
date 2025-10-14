@@ -49,9 +49,8 @@ http.interceptors.request.use(
         // 同时设置两种常见头，兼容后端读取策略
         config.headers['X-XSRF-TOKEN'] = token
         config.headers['X-CSRF-TOKEN'] = token
-        console.log('[CSRF] Using token:', token.substring(0, 10) + '...')
       } else {
-        console.warn('[CSRF] Still no token for', config.method?.toUpperCase(), config.url)
+        // 若无 token，仅静默继续（后端将返回403，前端正常提示）
       }
     }
     return config
