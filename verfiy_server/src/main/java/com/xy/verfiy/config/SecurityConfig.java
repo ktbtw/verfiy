@@ -33,7 +33,7 @@ public class SecurityConfig {
         CsrfTokenRequestAttributeHandler requestHandler = new CsrfTokenRequestAttributeHandler();
         requestHandler.setCsrfRequestAttributeName("_csrf");
         
-        // CSRF Token Repository
+        // CSRF Token Repository（使用 Cookie 存储，前端从 Cookie 读取并放到 Header）
         CookieCsrfTokenRepository tokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         tokenRepository.setCookiePath("/");
         
