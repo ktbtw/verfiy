@@ -76,8 +76,7 @@ public class UserProfileController {
         
         // 更新密码
         String encodedPassword = passwordEncoder.encode(newPassword);
-        user.setPassword(encodedPassword);
-        userAccountMapper.update(user);
+        userAccountMapper.updatePassword(username, encodedPassword);
         
         resp.put("success", true);
         resp.put("message", "密码修改成功");

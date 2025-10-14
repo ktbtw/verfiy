@@ -14,6 +14,7 @@ public interface UserAccountMapper {
     int updateInvitePermission(@Param("username") String username, 
                                @Param("canInvite") Boolean canInvite, 
                                @Param("inviteQuota") Integer inviteQuota);
+    int updatePassword(@Param("username") String username, @Param("password") String password);
 }
 
 
