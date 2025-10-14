@@ -1360,7 +1360,7 @@ onUnmounted(() => {
             </div>
             <div class="modal-body">
               <!-- 消息提示区域（预留固定高度避免跳动） -->
-              <div class="message-container">
+              <div class="message-container" :class="{ 'has-message': changePasswordDialog.message }">
                 <transition name="message-fade">
                   <div v-if="changePasswordDialog.message" :class="['message', changePasswordDialog.messageType === 'success' ? 'message-success' : 'message-error']">
                     <svg v-if="changePasswordDialog.messageType === 'success'" class="message-icon" viewBox="0 0 20 20" fill="currentColor">
@@ -3266,8 +3266,13 @@ onUnmounted(() => {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1));
 }
 
-/* 消息容器：预留固定高度避免UI跳动 */
+/* 消息容器：动态高度，有消息时预留空间避免UI跳动 */
 .message-container {
+  min-height: 0;
+  transition: min-height 0.3s ease;
+}
+
+.message-container.has-message {
   min-height: 48px;
   margin-bottom: 16px;
 }
