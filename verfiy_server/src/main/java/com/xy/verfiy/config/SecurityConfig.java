@@ -35,6 +35,7 @@ public class SecurityConfig {
         
         // CSRF Token Repository
         CookieCsrfTokenRepository tokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        tokenRepository.setCookiePath("/");
         
         http
             .csrf(csrf -> csrf
@@ -46,8 +47,8 @@ public class SecurityConfig {
                 // H2 控制台（仅开发环境）
                 .ignoringRequestMatchers("/h2/**")
             )
-            // 添加 CSRF Token Filter，确保每个请求都生成 Token
-            .addFilterAfter(new CsrfTokenFilter(tokenRepository), CsrfFilter.class)
+            // 添加 CSRF Token Filter，确保每个请求都生成 Token（在 CsrfFilter 之前）
+            .addFilterBefore(new CsrfTokenFilter(tokenRepository), CsrfFilter.class)
             .authorizeHttpRequests(authorize -> authorize
                 // 公开的认证接口
                 .requestMatchers("/api/auth/**").permitAll()
