@@ -36,7 +36,8 @@ public class NoticeApiController {
         try {
             long reqTs = Long.parseLong(ts);
             long now = Instant.now().getEpochSecond();
-            if (Math.abs(now - reqTs) > 300) return makeResponse(app, null, unauthorized("请求已过期"));
+            // 缩短防重放窗口到60秒（更安全）
+            if (Math.abs(now - reqTs) > 60) return makeResponse(app, null, unauthorized("请求已过期"));
         } catch (NumberFormatException e) {
             return makeResponse(app, null, unauthorized("时间戳格式错误"));
         }

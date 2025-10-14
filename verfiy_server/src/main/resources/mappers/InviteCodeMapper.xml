@@ -9,11 +9,13 @@
         <result property="used" column="used" />
         <result property="usedBy" column="used_by" />
         <result property="usedAt" column="used_at" />
+        <result property="canInvite" column="can_invite" />
+        <result property="inviteQuota" column="invite_quota" />
     </resultMap>
 
     <insert id="insert" parameterType="com.xy.verfiy.domain.InviteCode" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO invite_codes(code, created_by, created_at, used)
-        VALUES(#{code}, #{createdBy}, NOW(), false)
+        INSERT INTO invite_codes(code, created_by, created_at, used, can_invite, invite_quota)
+        VALUES(#{code}, #{createdBy}, NOW(), false, #{canInvite}, #{inviteQuota})
     </insert>
 
     <select id="findByCode" parameterType="string" resultMap="InviteResult">

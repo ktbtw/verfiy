@@ -62,7 +62,10 @@ const isAdmin = ref(false)
 const inviteDialog = ref({
   show: false,
   loading: false,
-  code: ''
+  code: '',
+  count: 1,
+  canInvite: false,
+  inviteQuota: 0
 })
 const inviteList = ref<any[]>([])
 
@@ -274,14 +277,22 @@ function closeInviteDialog() {
 async function generateInvite() {
   inviteDialog.value.loading = true
   try {
-    const { data } = await http.post('/admin/invites/generate')
+    const params = new URLSearchParams()
+    params.append('count', String(inviteDialog.value.count || 1))
+    params.append('canInvite', String(inviteDialog.value.canInvite))
+    params.append('inviteQuota', String(inviteDialog.value.inviteQuota))
+    
+    const { data } = await http.post('/admin/invites/generate-batch?' + params.toString())
     if (data.success) {
-      inviteDialog.value.code = data.code
       await fetchInviteList()
-      toastMessage.value = '邀请码已生成'
+      toastMessage.value = `成功生成 ${data.count} 个邀请码`
       toastType.value = 'success'
       showToast.value = true
       setTimeout(() => (showToast.value = false), 2000)
+      // 重置表单
+      inviteDialog.value.count = 1
+      inviteDialog.value.canInvite = false
+      inviteDialog.value.inviteQuota = 0
     } else {
       toastMessage.value = data.message || '生成失败'
       toastType.value = 'error'
@@ -767,6 +778,48 @@ onUnmounted(() => {
               </button>
             </div>
             <div class="modal-body invite-modal-body">
+              <!-- 批量生成配置区域 -->
+              <div class="invite-generate-form">
+                <div class="generate-controls">
+                  <div class="input-group">
+                    <label class="input-label">数量</label>
+                    <input 
+                      type="number" 
+                      v-model.number="inviteDialog.count" 
+                      min="1" 
+                      max="100" 
+                      class="styled-input"
+                    />
+                  </div>
+                  
+                  <div class="checkbox-group">
+                    <label class="styled-checkbox">
+                      <input type="checkbox" v-model="inviteDialog.canInvite" />
+                      <span class="checkbox-box"></span>
+                      <span class="checkbox-text">允许新用户邀请</span>
+                    </label>
+                  </div>
+                  
+                  <div class="input-group" :class="{ 'disabled-group': !inviteDialog.canInvite }">
+                    <label class="input-label">配额</label>
+                    <input 
+                      type="number" 
+                      v-model.number="inviteDialog.inviteQuota" 
+                      min="-1" 
+                      class="styled-input"
+                      :disabled="!inviteDialog.canInvite"
+                    />
+                  </div>
+                  
+                  <UiButton @click="generateInvite" :loading="inviteDialog.loading" class="primary-action-btn">
+                    <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                    </svg>
+                    <span>批量生成</span>
+                  </UiButton>
+                </div>
+              </div>
+              
               <div class="invite-toolbar">
                 <div class="toolbar-info">
                   <svg class="info-icon" viewBox="0 0 20 20" fill="currentColor">
@@ -774,12 +827,6 @@ onUnmounted(() => {
                   </svg>
                   <span>共 {{ inviteList.length }} 条邀请码</span>
                 </div>
-                <UiButton @click="generateInvite" :loading="inviteDialog.loading">
-                  <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
-                  </svg>
-                  生成新邀请码
-                </UiButton>
               </div>
               <div class="invite-table-wrapper">
                 <table class="invite-table">
@@ -788,6 +835,8 @@ onUnmounted(() => {
                       <th>邀请码</th>
                       <th>创建时间</th>
                       <th>状态</th>
+                      <th>邀请权限</th>
+                      <th>邀请配额</th>
                       <th>使用者</th>
                       <th>使用时间</th>
                       <th>操作</th>
@@ -809,6 +858,11 @@ onUnmounted(() => {
                         <span v-if="item.used" class="status-badge status-used">已使用</span>
                         <span v-else class="status-badge status-available">未使用</span>
                       </td>
+                      <td class="permission-cell">
+                        <span v-if="item.canInvite" class="permission-badge permission-yes">✓</span>
+                        <span v-else class="permission-badge permission-no">✗</span>
+                      </td>
+                      <td class="quota-cell">{{ item.inviteQuota === -1 ? '无限' : (item.inviteQuota || 0) }}</td>
                       <td class="user-cell">{{ item.usedBy || '-' }}</td>
                       <td class="time-cell">{{ item.usedAt ? formatTime(item.usedAt) : '-' }}</td>
                       <td>
@@ -1338,6 +1392,198 @@ onUnmounted(() => {
   font-size: 13px;
   color: var(--text-2);
   font-weight: 400;
+}
+
+/* 批量生成表单样式 - 精美版本 */
+.invite-generate-form {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.3), 0 8px 10px -6px rgba(139, 92, 246, 0.2);
+}
+
+.generate-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 100px;
+  align-self: flex-end;
+}
+
+.input-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.styled-input {
+  padding: 0 14px;
+  height: 40px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+  width: 100px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.styled-input::-webkit-outer-spin-button,
+.styled-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.styled-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.styled-input:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.disabled-group {
+  opacity: 0.4;
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  flex: 1;
+  padding-bottom: 8px;
+}
+
+.styled-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.styled-checkbox input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.checkbox-box {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.styled-checkbox input[type="checkbox"]:checked + .checkbox-box {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+.styled-checkbox input[type="checkbox"]:checked + .checkbox-box::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -60%) rotate(45deg);
+  width: 6px;
+  height: 11px;
+  border: solid white;
+  border-width: 0 2.5px 2.5px 0;
+}
+
+.checkbox-text {
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.primary-action-btn {
+  margin-left: auto;
+  padding: 0 28px;
+  height: 40px;
+  background: white;
+  color: #8b5cf6;
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-end;
+}
+
+.primary-action-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.primary-action-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.primary-action-btn .btn-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* 权限和配额列样式 */
+.permission-cell {
+  text-align: center;
+}
+
+.permission-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.permission-yes {
+  background: #10b981;
+  color: white;
+}
+
+.permission-no {
+  background: #ef4444;
+  color: white;
+}
+
+.quota-cell {
+  text-align: center;
+  font-weight: 500;
+  color: #6b7280;
 }
 
 .invite-modal-body {
@@ -2383,6 +2629,39 @@ onUnmounted(() => {
   }
   
   /* 暗色模式下的邀请码样式 */
+  .invite-generate-form {
+    background: linear-gradient(135deg, #4338ca 0%, #6b21a8 50%, #a21caf 100%);
+    box-shadow: 0 10px 25px -5px rgba(67, 56, 202, 0.4), 0 8px 10px -6px rgba(107, 33, 168, 0.3);
+  }
+
+  .styled-input {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  .styled-input:focus {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
+  .checkbox-box {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+
+  .primary-action-btn {
+    background: rgba(255, 255, 255, 0.95);
+    color: #7c3aed;
+  }
+
+  .primary-action-btn:hover:not(:disabled) {
+    background: white;
+  }
+
+  .quota-cell {
+    color: #9ca3af;
+  }
+
   .invite-table-wrapper {
     background: rgba(255, 255, 255, 0.03);
     border-color: rgba(255, 255, 255, 0.1);

@@ -28,8 +28,28 @@ public class InviteCodeServiceImpl implements InviteCodeService {
         ic.setCode(code);
         ic.setCreatedBy(createdBy);
         ic.setUsed(false);
+        ic.setCanInvite(false);  // 默认无邀请权限
+        ic.setInviteQuota(0);    // 默认配额为0
         inviteCodeMapper.insert(ic);
         return code;
+    }
+
+    @Override
+    @Transactional
+    public List<String> generateBatch(String createdBy, int count, Boolean canInvite, Integer inviteQuota) {
+        List<String> codes = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            String code = generateCode();
+            InviteCode ic = new InviteCode();
+            ic.setCode(code);
+            ic.setCreatedBy(createdBy);
+            ic.setUsed(false);
+            ic.setCanInvite(canInvite != null ? canInvite : false);
+            ic.setInviteQuota(inviteQuota != null ? inviteQuota : 0);
+            inviteCodeMapper.insert(ic);
+            codes.add(code);
+        }
+        return codes;
     }
 
     @Override

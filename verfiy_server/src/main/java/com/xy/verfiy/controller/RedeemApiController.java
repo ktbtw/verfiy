@@ -69,7 +69,8 @@ public class RedeemApiController {
         try {
             long reqTs = Long.parseLong(ts);
             long now = Instant.now().getEpochSecond();
-            if (Math.abs(now - reqTs) > 300) return makeResponse(app, null, unauthorized("请求已过期"));
+            // 缩短防重放窗口到60秒（更安全）
+            if (Math.abs(now - reqTs) > 60) return makeResponse(app, null, unauthorized("请求已过期"));
         } catch (NumberFormatException e) {
             return makeResponse(app, null, unauthorized("时间戳格式错误"));
         }
@@ -78,21 +79,6 @@ public class RedeemApiController {
         // 使用 secretKey 进行签名验证，如果没有配置则使用 apiKey
         String secret = app.getSecretKey() != null && !app.getSecretKey().isEmpty() ? app.getSecretKey() : apiKey;
         String expect = CryptoUtils.md5Hex(secret + ts + toSign);
-        
-        // 调试日志
-        System.out.println("===== 后端签名验证调试信息 =====");
-        System.out.println("apiKey: " + apiKey);
-        System.out.println("app.getApiKey(): " + app.getApiKey());
-        System.out.println("app.getSecretKey(): " + app.getSecretKey());
-        System.out.println("最终 secret: " + secret);
-        System.out.println("timestamp: " + ts);
-        System.out.println("code: " + code);
-        System.out.println("payload: " + payload);
-        System.out.println("toSign: " + toSign);
-        System.out.println("签名字符串: " + secret + ts + toSign);
-        System.out.println("期望的签名: " + expect);
-        System.out.println("收到的签名: " + sign);
-        System.out.println("============================");
         
         if (sign == null || !expect.equalsIgnoreCase(sign)) return makeResponse(app, secret, unauthorized("签名不合法"));
 

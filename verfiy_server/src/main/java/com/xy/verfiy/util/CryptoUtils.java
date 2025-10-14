@@ -5,7 +5,9 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.Arrays;
 
 public final class CryptoUtils {
     private CryptoUtils() {}
@@ -58,11 +60,22 @@ public final class CryptoUtils {
         return out;
     }
 
+    /**
+     * AES-CBC 解密（IV 存储在密文前16字节）
+     */
     public static String decryptAesCbcBase64(String base64Cipher, String key) {
         try {
-            byte[] cipher = Base64.getDecoder().decode(base64Cipher);
+            byte[] cipherWithIv = Base64.getDecoder().decode(base64Cipher);
+            
+            // IV 存储在前16字节
+            if (cipherWithIv.length < 16) {
+                throw new IllegalArgumentException("密文长度不足");
+            }
+            
+            byte[] iv = Arrays.copyOfRange(cipherWithIv, 0, 16);
+            byte[] cipher = Arrays.copyOfRange(cipherWithIv, 16, cipherWithIv.length);
+            
             byte[] k = normalizeKey(key);
-            byte[] iv = new byte[16]; // 全零 IV（示例）
             Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
             c.init(Cipher.DECRYPT_MODE, new SecretKeySpec(k, "AES"), new IvParameterSpec(iv));
             byte[] plain = c.doFinal(cipher);
@@ -72,14 +85,28 @@ public final class CryptoUtils {
         }
     }
 
+    /**
+     * AES-CBC 加密（随机 IV，存储在密文前16字节）
+     */
     public static String encryptAesCbcToBase64(String plain, String key) {
         try {
             byte[] k = normalizeKey(key);
+            
+            // 生成随机 IV
             byte[] iv = new byte[16];
+            SecureRandom secureRandom = new SecureRandom();
+            secureRandom.nextBytes(iv);
+            
             Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
             c.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(k, "AES"), new IvParameterSpec(iv));
             byte[] enc = c.doFinal(plain.getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(enc);
+            
+            // 将 IV 和密文合并（IV 在前）
+            byte[] result = new byte[iv.length + enc.length];
+            System.arraycopy(iv, 0, result, 0, iv.length);
+            System.arraycopy(enc, 0, result, iv.length, enc.length);
+            
+            return Base64.getEncoder().encodeToString(result);
         } catch (Exception e) {
             throw new RuntimeException("AES 加密失败", e);
         }

@@ -6,6 +6,7 @@ import java.util.List;
 
 public interface InviteCodeService {
     String generate(String createdBy);
+    List<String> generateBatch(String createdBy, int count, Boolean canInvite, Integer inviteQuota);
     boolean validateAndUse(String code, String usedBy);
     List<InviteCode> listAll();
     List<InviteCode> listByCreator(String creator);

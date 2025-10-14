@@ -10,6 +10,8 @@ public class InviteCode {
     private Boolean used;
     private String usedBy;
     private LocalDateTime usedAt;
+    private Boolean canInvite;  // 新用户是否有邀请权限
+    private Integer inviteQuota; // 新用户的邀请配额（-1表示无限制）
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -31,6 +33,12 @@ public class InviteCode {
 
     public LocalDateTime getUsedAt() { return usedAt; }
     public void setUsedAt(LocalDateTime usedAt) { this.usedAt = usedAt; }
+
+    public Boolean getCanInvite() { return canInvite; }
+    public void setCanInvite(Boolean canInvite) { this.canInvite = canInvite; }
+
+    public Integer getInviteQuota() { return inviteQuota; }
+    public void setInviteQuota(Integer inviteQuota) { this.inviteQuota = inviteQuota; }
 }
 
 

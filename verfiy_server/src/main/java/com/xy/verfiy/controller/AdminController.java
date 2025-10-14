@@ -206,6 +206,60 @@ public class AdminController {
         return resp;
     }
 
+    @PostMapping("/invites/generate-batch")
+    public Map<String, Object> generateInviteBatch(
+            @RequestParam(defaultValue = "1") int count,
+            @RequestParam(required = false) Boolean canInvite,
+            @RequestParam(required = false) Integer inviteQuota,
+            Authentication authentication) {
+        Map<String, Object> resp = new HashMap<>();
+        if (authentication == null) {
+            resp.put("success", false);
+            resp.put("message", "未登录");
+            return resp;
+        }
+        
+        String username = authentication.getName();
+        UserAccount user = userAccountMapper.findByUsername(username);
+        
+        if (user == null) {
+            resp.put("success", false);
+            resp.put("message", "用户不存在");
+            return resp;
+        }
+        
+        // 检查邀请权限
+        if (user.getCanInvite() == null || !user.getCanInvite()) {
+            resp.put("success", false);
+            resp.put("message", "无权限");
+            return resp;
+        }
+        
+        // 限制批量生成数量
+        if (count < 1 || count > 100) {
+            resp.put("success", false);
+            resp.put("message", "生成数量必须在1-100之间");
+            return resp;
+        }
+        
+        // 检查邀请配额（-1表示无限）
+        if (user.getInviteQuota() != null && user.getInviteQuota() != -1) {
+            int used = inviteCodeService.countByCreator(username);
+            if (used + count > user.getInviteQuota()) {
+                resp.put("success", false);
+                resp.put("message", "邀请配额不足，当前已使用 " + used + "，剩余 " + (user.getInviteQuota() - used));
+                return resp;
+            }
+        }
+        
+        // 批量生成邀请码
+        List<String> codes = inviteCodeService.generateBatch(username, count, canInvite, inviteQuota);
+        resp.put("success", true);
+        resp.put("codes", codes);
+        resp.put("count", codes.size());
+        return resp;
+    }
+
     @GetMapping("/invites")
     public Map<String, Object> listInvites(Authentication authentication) {
         Map<String, Object> resp = new HashMap<>();

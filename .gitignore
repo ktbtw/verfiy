@@ -1,41 +1,51 @@
-# xyz验证 - 根目录配置
-# Author: ktbtw
+# 环境变量文件（包含敏感信息）
+.env
+.env.local
+.env.*.local
 
-# 部署配置（使用 deploy.sh.example 作为模板）
-deploy.sh
+# Java 编译产物
+*.class
+*.jar
+*.war
+*.ear
+target/
+build/
 
-# SSH 密钥文件
-*.pem
-*.key
-*.ppk
-id_rsa*
-
-# 数据库文件（排除结构文件）
-verfiy_server/data/*.db
-verfiy_server/data/*.mv.db
-*.db
-*.mv.db
-*.sql.gz
-
-# 备份文件
-*.tar.gz
-backups/
-
-# 操作系统
+# IDE 配置
+.idea/
+*.iml
+.vscode/
 .DS_Store
-Thumbs.db
 
 # 日志文件
 *.log
+logs/
 
 # 临时文件
 *.tmp
-*.bak
+*.temp
 *.swp
+*~
 
-# Nginx 配置（可能包含域名信息）
-nginx_*.conf
+# 数据库配置文件（包含密码）
+application.properties
+application-*.properties
 
-# 测试脚本（可能包含敏感信息）
-test-*.js
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+*.tgz
 
+# 证书文件
+*.jks
+*.p12
+*.pem
+*.key
+*.crt
+
+# 备份文件
+*.bak
+*.backup

@@ -135,7 +135,9 @@ CREATE TABLE invite_codes (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   used TINYINT(1) NOT NULL DEFAULT 0,
   used_by VARCHAR(64) DEFAULT NULL,
-  used_at DATETIME DEFAULT NULL
+  used_at DATETIME DEFAULT NULL,
+  can_invite TINYINT(1) DEFAULT 0 COMMENT '新用户是否有邀请权限',
+  invite_quota INT DEFAULT 0 COMMENT '新用户的邀请配额（-1表示无限制）'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ----------------------------
@@ -161,5 +163,7 @@ ALTER TABLE users ADD COLUMN invite_quota INT DEFAULT 0;
 
 -- 给 admin 用户默认的邀请权限（无限配额）
 UPDATE users SET can_invite = TRUE, invite_quota = -1 WHERE username = 'admin';
+
+
 
 
