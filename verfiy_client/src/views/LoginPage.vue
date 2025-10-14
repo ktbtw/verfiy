@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import http from '../utils/http'
 // @ts-ignore
 import UiInput from '../components/ui/Input.vue'
 // @ts-ignore
@@ -36,6 +37,14 @@ async function submit() {
       if (data.success) {
         // 登录成功，等待一小段时间确保 session 生效
         await new Promise(resolve => setTimeout(resolve, 200))
+        
+        // 主动获取CSRF Token（通过调用一个需要认证的接口）
+        try {
+          await http.get('/admin/apps/api/my-apps')
+          console.log('[Login] CSRF Token initialized')
+        } catch (e) {
+          console.warn('[Login] Failed to initialize CSRF Token:', e)
+        }
         
         // 验证认证状态
         const authCheck = await fetch('/verfiy/api/auth/me', { credentials: 'include' })

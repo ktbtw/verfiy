@@ -60,23 +60,17 @@ async function checkCurrentApp() {
 
 async function logout() {
   try {
-    await http.post('/logout')
-    
-    // 清空前端状态并跳转
+    // 先清空前端状态
     isAuthenticated.value = false
     username.value = ''
     currentAppId.value = null
     currentAppName.value = ''
     
-    // 清理所有可能的 cookie
-    document.cookie.split(";").forEach(c => {
-      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/")
-    })
+    // 调用后端退出登录
+    await http.post('/logout')
     
+    // 跳转到登录页（不要reload，避免重新检查认证）
     await router.push('/login')
-    
-    // 强制刷新页面确保清理干净
-    setTimeout(() => window.location.reload(), 100)
   } catch (e) {
     console.error('退出登录失败', e)
     // 即使失败也跳转到登录页
@@ -85,7 +79,6 @@ async function logout() {
     currentAppId.value = null
     currentAppName.value = ''
     await router.push('/login')
-    setTimeout(() => window.location.reload(), 100)
   }
 }
 

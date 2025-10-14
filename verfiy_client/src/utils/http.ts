@@ -12,6 +12,10 @@ http.interceptors.request.use(
     const csrfToken = getCookie('XSRF-TOKEN')
     if (csrfToken && config.method !== 'get') {
       config.headers['X-XSRF-TOKEN'] = csrfToken
+      console.log('[CSRF] Token found and added:', csrfToken.substring(0, 10) + '...')
+    } else if (config.method !== 'get') {
+      console.warn('[CSRF] No token found for', config.method?.toUpperCase(), config.url)
+      console.warn('[CSRF] Cookies:', document.cookie)
     }
     return config
   },
