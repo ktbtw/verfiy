@@ -25,6 +25,12 @@ function onInput(e: Event) {
 .ui-input::placeholder { color: var(--text-2); }
 .ui-input:focus { outline: none; border-color: rgba(79,70,229,.35); box-shadow: 0 0 0 4px rgba(79,70,229,.15); }
 @media (prefers-color-scheme: dark){ .ui-input { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); color: var(--text-1-dark); } }
+
+/* 隐藏浏览器默认的密码显示/清除图标（避免与自定义“眼睛”按钮重复） */
+.ui-input::-ms-reveal,
+.ui-input::-ms-clear { display: none; }
+.ui-input::-webkit-contacts-auto-fill-button,
+.ui-input::-webkit-credentials-auto-fill-button { display: none !important; visibility: hidden; pointer-events: none; }
 </style>
 
 
