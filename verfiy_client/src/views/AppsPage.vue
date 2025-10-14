@@ -629,14 +629,24 @@ async function changePassword() {
     })
     
     if (data.success) {
-      changePasswordDialog.value.message = '密码修改成功，请重新登录'
+      changePasswordDialog.value.message = '密码修改成功，即将跳转到登录页...'
       changePasswordDialog.value.messageType = 'success'
       
-      // 延迟后跳转到登录页
-      setTimeout(() => {
+      // 延迟后退出登录并跳转
+      setTimeout(async () => {
         closeChangePasswordDialog()
-        window.location.href = '/login'
-      }, 2000)
+        closeProfileDialog()
+        
+        // 调用退出登录清理会话
+        try {
+          await http.post('/logout')
+        } catch (e) {
+          // 忽略退出错误
+        }
+        
+        // 使用 router 跳转到登录页
+        router.push('/login')
+      }, 1500)
     } else {
       changePasswordDialog.value.message = data.message || '修改失败'
       changePasswordDialog.value.messageType = 'error'
