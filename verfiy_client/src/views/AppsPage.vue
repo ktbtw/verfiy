@@ -94,6 +94,17 @@ type Profile = {
 }
 const profile = ref<Profile | null>(null)
 
+// 修改密码对话框
+const changePasswordDialog = ref({
+  show: false,
+  loading: false,
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+  message: '',
+  messageType: '' as 'success' | 'error' | ''
+})
+
 const encAlgOptions = [
   { value: 'RC4', label: 'RC4' },
   { value: 'AES-128-CBC', label: 'AES-128-CBC' },
@@ -559,6 +570,83 @@ async function openProfileDialog() {
 function closeProfileDialog() {
   profileDialog.value.show = false
   profile.value = null
+}
+
+// 打开修改密码对话框
+function openChangePasswordDialog() {
+  changePasswordDialog.value.show = true
+  changePasswordDialog.value.oldPassword = ''
+  changePasswordDialog.value.newPassword = ''
+  changePasswordDialog.value.confirmPassword = ''
+  changePasswordDialog.value.message = ''
+  changePasswordDialog.value.messageType = ''
+}
+
+// 关闭修改密码对话框
+function closeChangePasswordDialog() {
+  changePasswordDialog.value.show = false
+  changePasswordDialog.value.oldPassword = ''
+  changePasswordDialog.value.newPassword = ''
+  changePasswordDialog.value.confirmPassword = ''
+  changePasswordDialog.value.message = ''
+  changePasswordDialog.value.messageType = ''
+}
+
+// 修改密码
+async function changePassword() {
+  // 前端验证
+  if (!changePasswordDialog.value.oldPassword) {
+    changePasswordDialog.value.message = '请输入当前密码'
+    changePasswordDialog.value.messageType = 'error'
+    return
+  }
+  
+  if (!changePasswordDialog.value.newPassword) {
+    changePasswordDialog.value.message = '请输入新密码'
+    changePasswordDialog.value.messageType = 'error'
+    return
+  }
+  
+  if (changePasswordDialog.value.newPassword.length < 8) {
+    changePasswordDialog.value.message = '新密码长度不能少于8位'
+    changePasswordDialog.value.messageType = 'error'
+    return
+  }
+  
+  if (changePasswordDialog.value.newPassword !== changePasswordDialog.value.confirmPassword) {
+    changePasswordDialog.value.message = '两次输入的密码不一致'
+    changePasswordDialog.value.messageType = 'error'
+    return
+  }
+  
+  changePasswordDialog.value.loading = true
+  changePasswordDialog.value.message = ''
+  
+  try {
+    const { data } = await http.post('/admin/user/change-password', {
+      oldPassword: changePasswordDialog.value.oldPassword,
+      newPassword: changePasswordDialog.value.newPassword
+    })
+    
+    if (data.success) {
+      changePasswordDialog.value.message = '密码修改成功，请重新登录'
+      changePasswordDialog.value.messageType = 'success'
+      
+      // 延迟后跳转到登录页
+      setTimeout(() => {
+        closeChangePasswordDialog()
+        window.location.href = '/login'
+      }, 2000)
+    } else {
+      changePasswordDialog.value.message = data.message || '修改失败'
+      changePasswordDialog.value.messageType = 'error'
+    }
+  } catch (e: any) {
+    changePasswordDialog.value.message = e.response?.data?.message || e.message || '修改失败'
+    changePasswordDialog.value.messageType = 'error'
+  } finally {
+    changePasswordDialog.value.loading = false
+  }
 }
 
 onMounted(() => {
@@ -1234,7 +1322,91 @@ onUnmounted(() => {
               </div>
             </div>
             <div class="modal-footer">
+              <button class="btn btn-primary" @click="openChangePasswordDialog">修改密码</button>
               <button class="btn btn-secondary" @click="closeProfileDialog">关闭</button>
+            </div>
+          </div>
+        </div>
+      </transition>
+
+      <!-- 修改密码对话框 -->
+      <transition name="modal-fade">
+        <div v-if="changePasswordDialog.show" class="modal-overlay" @click="closeChangePasswordDialog">
+          <div class="modal-container change-password-modal" @click.stop>
+            <div class="modal-header">
+              <div class="modal-title-section">
+                <div class="modal-icon-wrapper password-icon-wrapper">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <h3 class="modal-title">修改密码</h3>
+              </div>
+              <button class="modal-close" @click="closeChangePasswordDialog">
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body">
+              <!-- 消息提示 -->
+              <transition name="message-slide">
+                <div v-if="changePasswordDialog.message" :class="['message', changePasswordDialog.messageType === 'success' ? 'message-success' : 'message-error']">
+                  <svg v-if="changePasswordDialog.messageType === 'success'" class="message-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                  </svg>
+                  <svg v-else class="message-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                  </svg>
+                  <span>{{ changePasswordDialog.message }}</span>
+                </div>
+              </transition>
+
+              <form @submit.prevent="changePassword" class="password-form">
+                <div class="form-field">
+                  <label class="field-label">当前密码</label>
+                  <input 
+                    type="password" 
+                    v-model="changePasswordDialog.oldPassword" 
+                    placeholder="请输入当前密码"
+                    class="form-input"
+                    :disabled="changePasswordDialog.loading"
+                  />
+                </div>
+
+                <div class="form-field">
+                  <label class="field-label">新密码</label>
+                  <input 
+                    type="password" 
+                    v-model="changePasswordDialog.newPassword" 
+                    placeholder="请输入新密码（至少8位）"
+                    class="form-input"
+                    :disabled="changePasswordDialog.loading"
+                  />
+                </div>
+
+                <div class="form-field">
+                  <label class="field-label">确认新密码</label>
+                  <input 
+                    type="password" 
+                    v-model="changePasswordDialog.confirmPassword" 
+                    placeholder="请再次输入新密码"
+                    class="form-input"
+                    :disabled="changePasswordDialog.loading"
+                  />
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button 
+                class="btn btn-primary" 
+                @click="changePassword"
+                :disabled="changePasswordDialog.loading"
+              >
+                <span v-if="!changePasswordDialog.loading">确认修改</span>
+                <span v-else>修改中...</span>
+              </button>
+              <button class="btn btn-secondary" @click="closeChangePasswordDialog" :disabled="changePasswordDialog.loading">取消</button>
             </div>
           </div>
         </div>
@@ -3071,6 +3243,54 @@ onUnmounted(() => {
 /* 个人信息对话框样式 */
 .profile-modal {
   max-width: 600px !important;
+}
+
+/* 修改密码对话框 */
+.change-password-modal {
+  max-width: 460px !important;
+}
+
+.password-icon-wrapper {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1));
+}
+
+.password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.password-form .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.password-form .field-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.password-form .form-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.password-form .form-input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.password-form .form-input:disabled {
+  background: rgba(0, 0, 0, 0.05);
+  cursor: not-allowed;
 }
 
 .profile-icon-wrapper {
