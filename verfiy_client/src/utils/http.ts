@@ -15,6 +15,13 @@ async function ensureCsrfToken(): Promise<string | null> {
     csrfTokenCache = fromCookie
     return fromCookie
   }
+  // 先看全局（App.vue 可能已经写入）
+  // @ts-ignore
+  if (window.__XSRF_TOKEN__) {
+    // @ts-ignore
+    csrfTokenCache = window.__XSRF_TOKEN__
+    return csrfTokenCache
+  }
   // 2) 再看内存缓存
   if (csrfTokenCache) return csrfTokenCache
   // 3) 最后显式获取一次
@@ -39,7 +46,9 @@ http.interceptors.request.use(
       const token = getCookie('XSRF-TOKEN') || csrfTokenCache || (await ensureCsrfToken())
       if (token) {
         config.headers = config.headers || {}
+        // 同时设置两种常见头，兼容后端读取策略
         config.headers['X-XSRF-TOKEN'] = token
+        config.headers['X-CSRF-TOKEN'] = token
         console.log('[CSRF] Using token:', token.substring(0, 10) + '...')
       } else {
         console.warn('[CSRF] Still no token for', config.method?.toUpperCase(), config.url)

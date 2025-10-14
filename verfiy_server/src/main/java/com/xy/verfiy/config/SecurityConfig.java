@@ -31,6 +31,7 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         // CSRF Token 处理器
         CsrfTokenRequestAttributeHandler requestHandler = new CsrfTokenRequestAttributeHandler();
+        // 允许从请求头 X-XSRF-TOKEN / X-CSRF-TOKEN 读取
         requestHandler.setCsrfRequestAttributeName("_csrf");
         
         // CSRF Token Repository（使用 Cookie 存储，前端从 Cookie 读取并放到 Header）

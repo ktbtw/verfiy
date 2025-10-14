@@ -99,8 +99,17 @@ onMounted(() => {
   checkAuth()
   checkCurrentApp()
   // 主动拉取一次 CSRF Token，确保后续 POST 不会 403
-  // 拉一次 Token（不依赖返回，仅触发服务端下发 Cookie）
-  fetch('/verfiy/api/csrf-token', { credentials: 'include' }).catch(() => {})
+  // 拉一次 Token，并将返回的 token 写入内存缓存，确保首个 POST 可用
+  fetch('/verfiy/api/csrf-token', { credentials: 'include' })
+    .then(r => r.json())
+    .then(d => {
+      if (d && d.token) {
+        // 将 token 写入一个全局变量（http.ts 会复用）
+        // @ts-ignore
+        window.__XSRF_TOKEN__ = d.token
+      }
+    })
+    .catch(() => {})
 })
 
 // 监听路由变化，更新认证状态和当前应用
