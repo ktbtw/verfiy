@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import http from './utils/http'
 
 const router = useRouter()
 const route = useRoute()
@@ -59,14 +60,9 @@ async function checkCurrentApp() {
 
 async function logout() {
   try {
-    const resp = await fetch('/verfiy/logout', {
-      method: 'POST',
-      credentials: 'include'
-    })
+    await http.post('/logout')
     
-    console.log('退出登录响应:', resp.status, resp.statusText)
-    
-    // 无论后端返回什么，都清空前端状态并跳转
+    // 清空前端状态并跳转
     isAuthenticated.value = false
     username.value = ''
     currentAppId.value = null
