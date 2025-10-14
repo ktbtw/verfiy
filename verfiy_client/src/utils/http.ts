@@ -5,23 +5,49 @@ const http = axios.create({
   withCredentials: true,
 })
 
-// 请求拦截器：自动添加 CSRF Token
+// 简单的内存缓存，避免每次请求都打 /api/csrf-token
+let csrfTokenCache: string | null = null
+
+async function ensureCsrfToken(): Promise<string | null> {
+  // 1) 先从 Cookie 里取
+  const fromCookie = getCookie('XSRF-TOKEN')
+  if (fromCookie) {
+    csrfTokenCache = fromCookie
+    return fromCookie
+  }
+  // 2) 再看内存缓存
+  if (csrfTokenCache) return csrfTokenCache
+  // 3) 最后显式获取一次
+  try {
+    const resp = await fetch('/verfiy/api/csrf-token', { credentials: 'include' })
+    if (resp.ok) {
+      const data = await resp.json().catch(() => ({}))
+      if (data && typeof data.token === 'string' && data.token.length > 0) {
+        csrfTokenCache = data.token
+        return csrfTokenCache
+      }
+    }
+  } catch {}
+  return null
+}
+
+// 请求拦截器：自动添加 CSRF Token（支持异步）
 http.interceptors.request.use(
-  (config) => {
-    // 从 cookie 中获取 CSRF token
-    const csrfToken = getCookie('XSRF-TOKEN')
-    if (csrfToken && config.method !== 'get') {
-      config.headers['X-XSRF-TOKEN'] = csrfToken
-      console.log('[CSRF] Token found and added:', csrfToken.substring(0, 10) + '...')
-    } else if (config.method !== 'get') {
-      console.warn('[CSRF] No token found for', config.method?.toUpperCase(), config.url)
-      console.warn('[CSRF] Cookies:', document.cookie)
+  async (config) => {
+    // 仅对非 GET 请求添加
+    if (config.method && config.method.toLowerCase() !== 'get') {
+      const token = getCookie('XSRF-TOKEN') || csrfTokenCache || (await ensureCsrfToken())
+      if (token) {
+        config.headers = config.headers || {}
+        config.headers['X-XSRF-TOKEN'] = token
+        console.log('[CSRF] Using token:', token.substring(0, 10) + '...')
+      } else {
+        console.warn('[CSRF] Still no token for', config.method?.toUpperCase(), config.url)
+      }
     }
     return config
   },
-  (error) => {
-    return Promise.reject(error)
-  }
+  (error) => Promise.reject(error)
 )
 
 http.interceptors.response.use(

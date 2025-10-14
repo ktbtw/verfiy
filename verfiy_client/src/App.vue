@@ -99,6 +99,7 @@ onMounted(() => {
   checkAuth()
   checkCurrentApp()
   // 主动拉取一次 CSRF Token，确保后续 POST 不会 403
+  // 拉一次 Token（不依赖返回，仅触发服务端下发 Cookie）
   fetch('/verfiy/api/csrf-token', { credentials: 'include' }).catch(() => {})
 })
 
