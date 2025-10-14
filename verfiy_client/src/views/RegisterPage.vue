@@ -474,6 +474,11 @@ async function submit() {
   height: 100%;
 }
 
+/* 统一宽度：为带眼睛按钮的密码输入预留右侧内边距 */
+.password-wrapper .ui-input {
+  padding-right: 40px;
+}
+
 /* 密码强度指示器 */
 .password-strength {
   margin-top: 6px;

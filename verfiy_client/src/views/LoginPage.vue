@@ -354,6 +354,11 @@ async function submit() {
   height: 100%;
 }
 
+/* 统一宽度：为带眼睛按钮的密码输入预留右侧内边距 */
+.password-wrapper .ui-input {
+  padding-right: 40px;
+}
+
 /* 表单动作 */
 .form-actions {
   margin-top: 20px;

@@ -21,7 +21,7 @@ function onInput(e: Event) {
 </template>
 
 <style scoped>
-.ui-input { width: 100%; padding: 10px 12px; border-radius: var(--radius-s); border: 1px solid rgba(0,0,0,.08); background: rgba(255,255,255,.8); color: var(--text-1); transition: box-shadow .2s var(--ease-smooth), border-color .2s var(--ease-smooth); }
+.ui-input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: var(--radius-s); border: 1px solid rgba(0,0,0,.08); background: rgba(255,255,255,.8); color: var(--text-1); transition: box-shadow .2s var(--ease-smooth), border-color .2s var(--ease-smooth); }
 .ui-input::placeholder { color: var(--text-2); }
 .ui-input:focus { outline: none; border-color: rgba(79,70,229,.35); box-shadow: 0 0 0 4px rgba(79,70,229,.15); }
 @media (prefers-color-scheme: dark){ .ui-input { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); color: var(--text-1-dark); } }
