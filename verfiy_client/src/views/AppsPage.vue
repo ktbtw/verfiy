@@ -3273,7 +3273,31 @@ onUnmounted(() => {
 }
 
 .message-container .message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
   margin-bottom: 0;
+}
+
+.message-container .message-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.message-container .message-success {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: #059669;
+}
+
+.message-container .message-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #dc2626;
 }
 
 .password-form {
