@@ -42,8 +42,8 @@ public class SecurityConfig {
                 // 使用 Cookie 存储 CSRF Token
                 .csrfTokenRepository(tokenRepository)
                 .csrfTokenRequestHandler(requestHandler)
-                // 仅对公共 API 禁用 CSRF（卡密验证、公告接口、认证接口、退出登录）
-                .ignoringRequestMatchers("/api/redeem/**", "/api/notice/**", "/api/auth/**", "/logout")
+                // 仅对公共 API 禁用 CSRF（卡密验证、公告接口、认证接口、退出登录、显式获取CSRF Token接口）
+                .ignoringRequestMatchers("/api/redeem/**", "/api/notice/**", "/api/auth/**", "/api/csrf-token", "/logout")
                 // H2 控制台（仅开发环境）
                 .ignoringRequestMatchers("/h2/**")
             )
@@ -52,8 +52,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(authorize -> authorize
                 // 公开的认证接口
                 .requestMatchers("/api/auth/**").permitAll()
-                // 公开的 API 接口（卡密验证、公告）
-                .requestMatchers("/api/redeem/**", "/api/notice/**").permitAll()
+                // 公开的 API 接口（卡密验证、公告、显式获取 CSRF Token）
+                .requestMatchers("/api/redeem/**", "/api/notice/**", "/api/csrf-token").permitAll()
                 // 静态资源和前端路由
                 .requestMatchers("/", "/login", "/register", "/apps", "/cards").permitAll()
                 .requestMatchers("/assets/**", "/vite.svg", "/*.js", "/*.css", "/*.html").permitAll()

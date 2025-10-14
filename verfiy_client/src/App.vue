@@ -98,6 +98,8 @@ function backToApps() {
 onMounted(() => {
   checkAuth()
   checkCurrentApp()
+  // 主动拉取一次 CSRF Token，确保后续 POST 不会 403
+  fetch('/verfiy/api/csrf-token', { credentials: 'include' }).catch(() => {})
 })
 
 // 监听路由变化，更新认证状态和当前应用
