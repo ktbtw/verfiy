@@ -37,8 +37,8 @@ public class SecurityConfig {
                 // 使用 Cookie 存储 CSRF Token
                 .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                 .csrfTokenRequestHandler(requestHandler)
-                // 仅对公共 API 禁用 CSRF（卡密验证、公告接口）
-                .ignoringRequestMatchers("/api/redeem/**", "/api/notice/**")
+                // 仅对公共 API 禁用 CSRF（卡密验证、公告接口、认证接口）
+                .ignoringRequestMatchers("/api/redeem/**", "/api/notice/**", "/api/auth/**")
                 // H2 控制台（仅开发环境）
                 .ignoringRequestMatchers("/h2/**")
             )
