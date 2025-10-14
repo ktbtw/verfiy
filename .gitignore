@@ -50,3 +50,9 @@ dist/
 # 备份文件
 *.bak
 *.backup
+
+# 部署脚本（用户自定义）
+deploy.sh
+
+# 打包文件
+*.tar.gz
