@@ -15,6 +15,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.csrf.CsrfFilter;
 import com.xy.verfiy.mapper.UserAccountMapper;
 
 @Configuration
@@ -32,16 +33,21 @@ public class SecurityConfig {
         CsrfTokenRequestAttributeHandler requestHandler = new CsrfTokenRequestAttributeHandler();
         requestHandler.setCsrfRequestAttributeName("_csrf");
         
+        // CSRF Token Repository
+        CookieCsrfTokenRepository tokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        
         http
             .csrf(csrf -> csrf
                 // 使用 Cookie 存储 CSRF Token
-                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                .csrfTokenRepository(tokenRepository)
                 .csrfTokenRequestHandler(requestHandler)
                 // 仅对公共 API 禁用 CSRF（卡密验证、公告接口、认证接口、退出登录）
                 .ignoringRequestMatchers("/api/redeem/**", "/api/notice/**", "/api/auth/**", "/logout")
                 // H2 控制台（仅开发环境）
                 .ignoringRequestMatchers("/h2/**")
             )
+            // 添加 CSRF Token Filter，确保每个请求都生成 Token
+            .addFilterAfter(new CsrfTokenFilter(tokenRepository), CsrfFilter.class)
             .authorizeHttpRequests(authorize -> authorize
                 // 公开的认证接口
                 .requestMatchers("/api/auth/**").permitAll()
