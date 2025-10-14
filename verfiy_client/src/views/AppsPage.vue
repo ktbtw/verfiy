@@ -1359,18 +1359,20 @@ onUnmounted(() => {
               </button>
             </div>
             <div class="modal-body">
-              <!-- 消息提示 -->
-              <transition name="message-slide">
-                <div v-if="changePasswordDialog.message" :class="['message', changePasswordDialog.messageType === 'success' ? 'message-success' : 'message-error']">
-                  <svg v-if="changePasswordDialog.messageType === 'success'" class="message-icon" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                  </svg>
-                  <svg v-else class="message-icon" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                  </svg>
-                  <span>{{ changePasswordDialog.message }}</span>
-                </div>
-              </transition>
+              <!-- 消息提示区域（预留固定高度避免跳动） -->
+              <div class="message-container">
+                <transition name="message-fade">
+                  <div v-if="changePasswordDialog.message" :class="['message', changePasswordDialog.messageType === 'success' ? 'message-success' : 'message-error']">
+                    <svg v-if="changePasswordDialog.messageType === 'success'" class="message-icon" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                    <svg v-else class="message-icon" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    </svg>
+                    <span>{{ changePasswordDialog.message }}</span>
+                  </div>
+                </transition>
+              </div>
 
               <form @submit.prevent="changePassword" class="password-form">
                 <div class="form-field">
@@ -3264,6 +3266,16 @@ onUnmounted(() => {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1));
 }
 
+/* 消息容器：预留固定高度避免UI跳动 */
+.message-container {
+  min-height: 48px;
+  margin-bottom: 16px;
+}
+
+.message-container .message {
+  margin-bottom: 0;
+}
+
 .password-form {
   display: flex;
   flex-direction: column;
@@ -3301,6 +3313,17 @@ onUnmounted(() => {
 .password-form .form-input:disabled {
   background: rgba(0, 0, 0, 0.05);
   cursor: not-allowed;
+}
+
+/* 消息淡入淡出动画 */
+.message-fade-enter-active,
+.message-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.message-fade-enter-from,
+.message-fade-leave-to {
+  opacity: 0;
 }
 
 .profile-icon-wrapper {
