@@ -912,7 +912,7 @@ public class CardRedeemExample {
     
     public static void main(String[] args) throws Exception {
         // 配置信息
-        String apiUrl = "https://your-domain.com/api/redeem";
+        String apiUrl = "https://www.xyapi.top/verify/api/redeem";
         String apiKey = "${app.apiKey}";  // 用于身份识别（X-API-Key）
         String secretKey = "${secret}";   // 用于签名和加密
         String cardCode = "your-card-code";
@@ -1354,7 +1354,7 @@ function md5(str) {
 }
 ${jsEncryptFunctions}${jsDecryptFunctions}
 // 配置信息
-const apiUrl = 'https://your-domain.com/api/redeem';
+const apiUrl = 'https://www.xyapi.top/verify/api/redeem';
 const apiKey = '${app.apiKey}';      // 用于身份识别（X-API-Key）
 const secretKey = '${secret}';       // 用于签名和加密
 const cardCode = 'your-card-code';
@@ -1500,7 +1500,7 @@ def verify_card(api_url, api_key, secret_key, card_code, machine_code=None):
 # ========== 主程序 ==========
 if __name__ == '__main__':
     # 配置信息
-    API_URL = 'https://your-domain.com/api/redeem'
+    API_URL = 'https://www.xyapi.top/verify/api/redeem'
     API_KEY = '\${app.apiKey}'     # 用于身份识别（X-API-Key）
     SECRET_KEY = '\${secret}'      # 用于签名和加密
     CARD_CODE = 'your-card-code'
@@ -1657,7 +1657,7 @@ def verify_card(api_url, api_key, secret_key, card_code, machine_code=None):
 # ========== 主程序 ==========
 if __name__ == '__main__':
     # 配置信息
-    API_URL = 'https://your-domain.com/api/redeem'
+    API_URL = 'https://www.xyapi.top/verify/api/redeem'
     API_KEY = '\${app.apiKey}'     # 用于身份识别（X-API-Key）
     SECRET_KEY = '\${secret}'      # 用于签名和加密
     CARD_CODE = 'your-card-code'
@@ -1761,7 +1761,7 @@ def verify_card(api_url, api_key, secret_key, card_code, machine_code=None):
 # ========== 主程序 ==========
 if __name__ == '__main__':
     # 配置信息
-    API_URL = 'https://your-domain.com/api/redeem'
+    API_URL = 'https://www.xyapi.top/verify/api/redeem'
     API_KEY = '\${app.apiKey}'     # 用于身份识别（X-API-Key）
     SECRET_KEY = '\${secret}'      # 用于签名和加密
     CARD_CODE = 'your-card-code'
@@ -1967,7 +1967,7 @@ public class NoticeApiExample {
     
     public static void main(String[] args) throws Exception {
         // 配置信息
-        String apiUrl = "https://your-domain.com/api/notice";
+        String apiUrl = "https://www.xyapi.top/verfiy/api/notice";
         String apiKey = "${app.apiKey}";  // 用于身份识别（X-API-Key）
         String secretKey = "${secret}";   // 用于签名和加密
         
@@ -2037,7 +2037,7 @@ async function decryptAes(base64Cipher, key) {
 }
 
 // 配置信息
-const apiUrl = 'https://your-domain.com/api/notice';
+const apiUrl = 'https://www.xyapi.top/verfiy/api/notice';
 const apiKey = '\${app.apiKey}';
 const secretKey = '\${secret}';
 
@@ -2113,7 +2113,7 @@ function decryptRc4(base64Cipher, key) {
 }
 
 // 配置信息
-const apiUrl = 'https://your-domain.com/api/notice';
+const apiUrl = 'https://www.xyapi.top/verfiy/api/notice';
 const apiKey = '\${app.apiKey}';
 const secretKey = '\${secret}';
 
@@ -2170,7 +2170,7 @@ function md5(str) {
 }
 
 // 配置信息
-const apiUrl = 'https://your-domain.com/api/notice';
+const apiUrl = 'https://www.xyapi.top/verfiy/api/notice';
 const apiKey = '\${app.apiKey}';
 const secretKey = '\${secret}';
 
@@ -2288,7 +2288,7 @@ def get_notice(api_url, api_key, secret_key):
         return None
 
 if __name__ == '__main__':
-    API_URL = 'https://your-domain.com/api/notice'
+    API_URL = 'https://www.xyapi.top/verfiy/api/notice'
     API_KEY = '\${app.apiKey}'
     SECRET_KEY = '\${secret}'
     
@@ -2398,7 +2398,7 @@ def get_notice(api_url, api_key, secret_key):
         return None
 
 if __name__ == '__main__':
-    API_URL = 'https://your-domain.com/api/notice'
+    API_URL = 'https://www.xyapi.top/verfiy/api/notice'
     API_KEY = '\${app.apiKey}'
     SECRET_KEY = '\${secret}'
     
@@ -2473,7 +2473,7 @@ def get_notice(api_url, api_key, secret_key):
         return None
 
 if __name__ == '__main__':
-    API_URL = 'https://your-domain.com/api/notice'
+    API_URL = 'https://www.xyapi.top/verfiy/api/notice'
     API_KEY = '\${app.apiKey}'
     SECRET_KEY = '\${secret}'
     
@@ -2511,25 +2511,67 @@ if __name__ == '__main__':
 
 // 示例数据
 const redeemExamples = computed(() => {
+  const normalizeMode = (mode?: string | null) => {
+    if (!mode) return 'SUCCESS_ONLY'
+    const raw = mode.trim()
+    if (!raw) return 'SUCCESS_ONLY'
+    const upper = raw.toUpperCase()
+    if (upper === 'ALWAYS') return 'ALWAYS'
+    if (upper === 'SUCCESS_ONLY' || upper === 'SUCCESS') return 'SUCCESS_ONLY'
+    if (upper === 'FAILURE_ONLY' || upper === 'FAILURE') return 'FAILURE_ONLY'
+    if (raw === '总是' || raw === '总是返回') return 'ALWAYS'
+    if (raw === '成功' || raw === '仅成功' || raw === '仅成功时返回') return 'SUCCESS_ONLY'
+    if (raw === '失败' || raw === '仅失败' || raw === '仅失败时返回') return 'FAILURE_ONLY'
+    return upper
+  }
+
+  const assignFields = (target: Record<string, any>, source: any) => {
+    if (!source || typeof source !== 'object') return
+    Object.entries(source).forEach(([k, v]) => {
+      if (!k) return
+      target[k] = v
+    })
+  }
+
   const customParams = appInfo.value?.redeemExtra
-  let extraFields: any = {}
-  
+  const globalMode = normalizeMode(appInfo.value?.redeemExtraMode || 'SUCCESS_ONLY')
+
+  const alwaysFields: Record<string, any> = {}
+  const successFields: Record<string, any> = {}
+  const failureFields: Record<string, any> = {}
+
   if (customParams) {
     try {
       const parsed = JSON.parse(customParams)
-      for (const key in parsed) {
-        const val = parsed[key]
-        if (typeof val === 'object' && val.value !== undefined) {
-          extraFields[key] = val.value
-        } else {
-          extraFields[key] = val
-        }
+      if (parsed && typeof parsed === 'object') {
+        Object.entries(parsed).forEach(([key, val]) => {
+          const mode = normalizeMode(key)
+          if (mode === 'ALWAYS' || mode === 'SUCCESS_ONLY' || mode === 'FAILURE_ONLY') {
+            if (mode === 'ALWAYS') {
+              assignFields(alwaysFields, val)
+            } else if (mode === 'SUCCESS_ONLY') {
+              assignFields(successFields, val)
+            } else {
+              assignFields(failureFields, val)
+            }
+            return
+          }
+
+          if (val && typeof val === 'object' && ('value' in val || 'mode' in val)) {
+            const valueMode = normalizeMode((val as any).mode || globalMode)
+            const target = valueMode === 'ALWAYS' ? alwaysFields : valueMode === 'FAILURE_ONLY' ? failureFields : successFields
+            target[key] = (val as any).value ?? ''
+          } else {
+            const target = globalMode === 'ALWAYS' ? alwaysFields : globalMode === 'FAILURE_ONLY' ? failureFields : successFields
+            target[key] = val
+          }
+        })
       }
     } catch (e) {
-      // ignore
+      // ignore JSON parse errors
     }
   }
-  
+
   return {
     request: {
       headers: {
@@ -2544,12 +2586,19 @@ const redeemExamples = computed(() => {
     },
     successResponse: {
       success: true,
+      code: 0,
       message: '核销成功',
-      ...extraFields
+      expireAt: 4100688000,
+      expireAtReadable: '永久有效',
+      ...alwaysFields,
+      ...successFields
     },
     failureResponse: {
       success: false,
-      message: '核销失败或不可用'
+      code: 1005,
+      message: '核销失败，可能是机器码已达上限或其他限制',
+      ...alwaysFields,
+      ...failureFields
     }
   }
 })
