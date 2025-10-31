@@ -61,18 +61,18 @@ public class RedeemApiController {
         if (payload == null) payload = queryPayload;
         
         Map<String, Object> body = new HashMap<>();
-        if (apiKey == null) return unauthorized("缺少 X-API-Key");
+        if (apiKey == null) return unauthorized(null, null, "缺少 X-API-Key", null);
         Application app = applicationService.findByApiKey(apiKey);
-        if (app == null) return unauthorized("API Key 无效");
+        if (app == null) return unauthorized(null, null, "API Key 无效", null);
         // 校验时间戳（防重放）
-        if (ts == null) return makeResponse(app, null, unauthorized("缺少 X-Timestamp"));
+        if (ts == null) return unauthorized(app, null, "缺少 X-Timestamp", null);
         try {
             long reqTs = Long.parseLong(ts);
             long now = Instant.now().getEpochSecond();
             // 缩短防重放窗口到60秒（更安全）
-            if (Math.abs(now - reqTs) > 60) return makeResponse(app, null, unauthorized("请求已过期"));
+            if (Math.abs(now - reqTs) > 60) return unauthorized(app, null, "请求已过期", null);
         } catch (NumberFormatException e) {
-            return makeResponse(app, null, unauthorized("时间戳格式错误"));
+            return unauthorized(app, null, "时间戳格式错误", null);
         }
         // 取待签名原文（优先 payload）
         String toSign = payload != null && !payload.isEmpty() ? payload : (code == null ? "" : code);
@@ -80,7 +80,7 @@ public class RedeemApiController {
         String secret = app.getSecretKey() != null && !app.getSecretKey().isEmpty() ? app.getSecretKey() : apiKey;
         String expect = CryptoUtils.md5Hex(secret + ts + toSign);
         
-        if (sign == null || !expect.equalsIgnoreCase(sign)) return makeResponse(app, secret, unauthorized("签名不合法"));
+        if (sign == null || !expect.equalsIgnoreCase(sign)) return unauthorized(app, secret, "签名不合法", null);
 
         String finalCode = code;
         String finalMachine = machine;
@@ -88,7 +88,7 @@ public class RedeemApiController {
         if (Boolean.TRUE.equals(app.getSecure())) {
             // 安全模式：必须提供加密的 payload
             if (payload == null || payload.isEmpty()) {
-                return makeResponse(app, secret, bad("缺少加密负载 payload"));
+                return bad(app, secret, "缺少加密负载 payload", null);
             }
             
             String alg = app.getEncryptionAlg() == null ? "RC4" : app.getEncryptionAlg();
@@ -109,14 +109,14 @@ public class RedeemApiController {
                 finalMachine = decryptedData.get("machine");
                 
             } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-                return makeResponse(app, secret, bad("payload 格式错误，必须是加密的 JSON 对象"));
+                return bad(app, secret, "payload 格式错误，必须是加密的 JSON 对象", null);
             } catch (Exception e) {
-                return makeResponse(app, secret, bad("解密失败"));
+                return bad(app, secret, "解密失败", null);
             }
         }
         
         if (finalCode == null || finalCode.isEmpty()) {
-            return makeResponse(app, secret, bad("code 不能为空"));
+            return bad(app, secret, "code 不能为空", null);
         }
 
         // 多次验证：不改变状态为 USED，仅进行校验、激活与机器码处理
@@ -207,80 +207,23 @@ public class RedeemApiController {
         }
         
         boolean ok = body.get("success") == Boolean.TRUE;
-        // 合并自定义返回参数（按应用配置的合并时机）
-        if (app.getRedeemExtra() != null && !app.getRedeemExtra().isEmpty()) {
-            try {
-                // 解析结构：{"k":{"value":...,"mode":"ALWAYS|SUCCESS_ONLY|FAILURE_ONLY"}} 或 旧格式 {"k":"v"}
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                @SuppressWarnings("unchecked")
-                Map<String, Object> extra = mapper.readValue(app.getRedeemExtra(), java.util.Map.class);
-                if (extra != null) {
-                    long nowTs = Instant.now().getEpochSecond();
-                    long nowMs = Instant.now().toEpochMilli();
-                    String date = LocalDate.now(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-                    String dateTime = LocalDateTime.now(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                    String iso8601 = Instant.now().toString();
-                    String uuid = UUID.randomUUID().toString();
-                    String nonce = randomAlphaNum(16);
-                    // 计算卡密到期时间戳（使用已获取的 card 对象）
-                    Long expireTs;
-                    if (card != null && card.getExpireAt() != null) {
-                        expireTs = card.getExpireAt().atZone(ZoneId.systemDefault()).toEpochSecond();
-                    } else {
-                        LocalDateTime ex = LocalDateTime.of(2099, 12, 12, 0, 0);
-                        expireTs = ex.atZone(ZoneId.systemDefault()).toEpochSecond();
-                    }
-                    for (Map.Entry<String, Object> en : extra.entrySet()) {
-                        String key = en.getKey();
-                        Object val = en.getValue();
-                        String mode;
-                        Object valueToMerge;
-                        if (val instanceof Map<?,?> m) {
-                            Object mv = m.get("value");
-                            Object mm = m.get("mode");
-                            mode = mm == null ? "SUCCESS_ONLY" : String.valueOf(mm);
-                            valueToMerge = mv;
-                        } else {
-                            // 向后兼容：旧格式
-                            mode = app.getRedeemExtraMode() == null ? "SUCCESS_ONLY" : app.getRedeemExtraMode();
-                            valueToMerge = val;
-                        }
-                        if (shouldMergeExtra(mode, ok)) {
-                            // 保护核心字段，不允许覆盖
-                            if ("success".equalsIgnoreCase(key) || 
-                                "code".equalsIgnoreCase(key) || 
-                                "message".equalsIgnoreCase(key) || 
-                                "expireAt".equalsIgnoreCase(key) ||
-                                "expireAtReadable".equalsIgnoreCase(key)) {
-                                continue; // 跳过核心字段
-                            }
-                            
-                            if (valueToMerge instanceof String s) {
-                                String r = s;
-                                r = r.replace("${timestamp}", String.valueOf(nowTs));
-                                r = r.replace("${millis}", String.valueOf(nowMs));
-                                r = r.replace("${date}", date);
-                                r = r.replace("${datetime}", dateTime);
-                                r = r.replace("${iso8601}", iso8601);
-                                r = r.replace("${uuid}", uuid);
-                                r = r.replace("${nonce}", nonce);
-                                r = r.replace("${expireTs}", expireTs == null ? "" : String.valueOf(expireTs));
-                                body.put(key, r);
-                            } else {
-                                body.put(key, valueToMerge);
-                            }
-                        }
-                    }
-                }
-            } catch (Exception ignored) { }
-        }
-        // 统一返回：无论成功失败，都根据 app.getSecure() 决定是否加密
-        return makeResponse(app, secret, ok ? ResponseEntity.ok(body) : ResponseEntity.badRequest().body(body));
+        return respond(app, secret, body, ok ? 200 : 400, card);
     }
 
     /**
      * 统一响应处理：如果应用开启了传输安全，则加密响应；否则直接返回原响应
      */
+    private ResponseEntity<Map<String, Object>> respond(Application app,
+                                                        String secret,
+                                                        Map<String, Object> body,
+                                                        int status,
+                                                        com.xy.verfiy.domain.Card card) {
+        boolean ok = body.get("success") == Boolean.TRUE;
+        mergeRedeemExtra(app, body, ok, card);
+        ResponseEntity<Map<String, Object>> original = ResponseEntity.status(status).body(body);
+        return makeResponse(app, secret, original);
+    }
+
     private ResponseEntity<Map<String, Object>> makeResponse(Application app, String secret, ResponseEntity<Map<String, Object>> original) {
         if (app == null || !Boolean.TRUE.equals(app.getSecure())) {
             return original;
@@ -321,8 +264,160 @@ public class RedeemApiController {
         }
     }
 
+    private void mergeRedeemExtra(Application app,
+                                  Map<String, Object> body,
+                                  boolean ok,
+                                  com.xy.verfiy.domain.Card card) {
+        if (app == null || app.getRedeemExtra() == null || app.getRedeemExtra().isEmpty()) {
+            return;
+        }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> extra = mapper.readValue(app.getRedeemExtra(), java.util.Map.class);
+            if (extra == null || extra.isEmpty()) {
+                return;
+            }
+            long nowTs = Instant.now().getEpochSecond();
+            long nowMs = Instant.now().toEpochMilli();
+            String date = LocalDate.now(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            String dateTime = LocalDateTime.now(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            String iso8601 = Instant.now().toString();
+            String uuid = UUID.randomUUID().toString();
+            String nonce = randomAlphaNum(16);
+            Long expireTs;
+            if (card != null && card.getExpireAt() != null) {
+                expireTs = card.getExpireAt().atZone(ZoneId.systemDefault()).toEpochSecond();
+            } else {
+                LocalDateTime ex = LocalDateTime.of(2099, 12, 12, 0, 0);
+                expireTs = ex.atZone(ZoneId.systemDefault()).toEpochSecond();
+            }
+
+            for (Map.Entry<String, Object> en : extra.entrySet()) {
+                String key = en.getKey();
+                Object val = en.getValue();
+
+                String groupMode = normalizeMode(key);
+                if ("ALWAYS".equals(groupMode) || "SUCCESS_ONLY".equals(groupMode) || "FAILURE_ONLY".equals(groupMode)) {
+                    if (!shouldMergeExtra(groupMode, ok)) {
+                        continue;
+                    }
+                    if (val instanceof Map<?,?> groupMap) {
+                        for (Map.Entry<?,?> entry : groupMap.entrySet()) {
+                            String groupKey = entry.getKey() == null ? null : String.valueOf(entry.getKey());
+                            Object groupValue = entry.getValue();
+                            mergeCustomValue(body, groupKey, groupValue, nowTs, nowMs, date, dateTime, iso8601, uuid, nonce, expireTs);
+                        }
+                    } else {
+                        mergeCustomValue(body, key, val, nowTs, nowMs, date, dateTime, iso8601, uuid, nonce, expireTs);
+                    }
+                    continue;
+                }
+
+                if (val instanceof Map<?,?> valueMap) {
+                    if (valueMap.containsKey("value") || valueMap.containsKey("mode")) {
+                        Object mv = valueMap.get("value");
+                        Object mm = valueMap.get("mode");
+                        if (shouldMergeExtra(mm == null ? null : String.valueOf(mm), ok)) {
+                            mergeCustomValue(body, key, mv, nowTs, nowMs, date, dateTime, iso8601, uuid, nonce, expireTs);
+                        }
+                    } else {
+                        if (shouldMergeExtra(app.getRedeemExtraMode(), ok)) {
+                            mergeCustomValue(body, key, valueMap, nowTs, nowMs, date, dateTime, iso8601, uuid, nonce, expireTs);
+                        }
+                    }
+                } else {
+                    if (shouldMergeExtra(app.getRedeemExtraMode(), ok)) {
+                        mergeCustomValue(body, key, val, nowTs, nowMs, date, dateTime, iso8601, uuid, nonce, expireTs);
+                    }
+                }
+            }
+        } catch (Exception ignored) { }
+    }
+
+    private void mergeCustomValue(Map<String, Object> body,
+                                  String key,
+                                  Object value,
+                                  long nowTs,
+                                  long nowMs,
+                                  String date,
+                                  String dateTime,
+                                  String iso8601,
+                                  String uuid,
+                                  String nonce,
+                                  Long expireTs) {
+        if (key == null || isCoreField(key)) {
+            return;
+        }
+        Object resolved = applyPlaceholders(value, nowTs, nowMs, date, dateTime, iso8601, uuid, nonce, expireTs);
+        body.put(key, resolved);
+    }
+
+    private Object applyPlaceholders(Object value,
+                                     long nowTs,
+                                     long nowMs,
+                                     String date,
+                                     String dateTime,
+                                     String iso8601,
+                                     String uuid,
+                                     String nonce,
+                                     Long expireTs) {
+        if (!(value instanceof String s)) {
+            return value;
+        }
+        String r = s;
+        r = r.replace("${timestamp}", String.valueOf(nowTs));
+        r = r.replace("${millis}", String.valueOf(nowMs));
+        r = r.replace("${date}", date);
+        r = r.replace("${datetime}", dateTime);
+        r = r.replace("${iso8601}", iso8601);
+        r = r.replace("${uuid}", uuid);
+        r = r.replace("${nonce}", nonce);
+        r = r.replace("${expireTs}", expireTs == null ? "" : String.valueOf(expireTs));
+        return r;
+    }
+
+    private boolean isCoreField(String key) {
+        return "success".equalsIgnoreCase(key) ||
+               "code".equalsIgnoreCase(key) ||
+               "message".equalsIgnoreCase(key) ||
+               "expireAt".equalsIgnoreCase(key) ||
+               "expireAtReadable".equalsIgnoreCase(key);
+    }
+
+    private String normalizeMode(String mode) {
+        if (mode == null) {
+            return "SUCCESS_ONLY";
+        }
+        String raw = mode.trim();
+        if (raw.isEmpty()) {
+            return "SUCCESS_ONLY";
+        }
+        String upper = raw.toUpperCase();
+        if ("ALWAYS".equals(upper)) {
+            return "ALWAYS";
+        }
+        if ("SUCCESS_ONLY".equals(upper) || "SUCCESS".equals(upper)) {
+            return "SUCCESS_ONLY";
+        }
+        if ("FAILURE_ONLY".equals(upper) || "FAILURE".equals(upper)) {
+            return "FAILURE_ONLY";
+        }
+        // 支持中文配置
+        if ("总是".equals(raw) || "总是返回".equals(raw)) {
+            return "ALWAYS";
+        }
+        if ("成功".equals(raw) || "仅成功".equals(raw) || "仅成功时返回".equals(raw)) {
+            return "SUCCESS_ONLY";
+        }
+        if ("失败".equals(raw) || "仅失败".equals(raw) || "仅失败时返回".equals(raw)) {
+            return "FAILURE_ONLY";
+        }
+        return upper;
+    }
+
     private boolean shouldMergeExtra(String mode, boolean success) {
-        String m = (mode == null || mode.isEmpty()) ? "SUCCESS_ONLY" : mode.toUpperCase();
+        String m = normalizeMode(mode);
         return switch (m) {
             case "ALWAYS" -> true;
             case "FAILURE_ONLY" -> !success;
@@ -340,18 +435,24 @@ public class RedeemApiController {
         return sb.toString();
     }
 
-    private ResponseEntity<Map<String, Object>> unauthorized(String msg) {
+    private ResponseEntity<Map<String, Object>> unauthorized(Application app,
+                                                             String secret,
+                                                             String msg,
+                                                             com.xy.verfiy.domain.Card card) {
         Map<String, Object> m = new HashMap<>();
         m.put("success", false);
         m.put("message", msg);
-        return ResponseEntity.status(401).body(m);
+        return respond(app, secret, m, 401, card);
     }
 
-    private ResponseEntity<Map<String, Object>> bad(String msg) {
+    private ResponseEntity<Map<String, Object>> bad(Application app,
+                                                    String secret,
+                                                    String msg,
+                                                    com.xy.verfiy.domain.Card card) {
         Map<String, Object> m = new HashMap<>();
         m.put("success", false);
         m.put("message", msg);
-        return ResponseEntity.badRequest().body(m);
+        return respond(app, secret, m, 400, card);
     }
 }
 
