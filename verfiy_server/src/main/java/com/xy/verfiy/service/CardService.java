@@ -34,6 +34,8 @@ public interface CardService {
     
     // 统计用户所有应用的卡密总数
     int countByOwner(String owner);
+
+    boolean existsVerifiedMachineForApp(Long appId, String machine);
 }
 
 

@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS `hook_info` (
   `dex_data` longtext COLLATE utf8mb4_unicode_ci COMMENT 'Dex 数据（Base64/Hex）',
   `zip_data` longtext COLLATE utf8mb4_unicode_ci COMMENT '资源压缩包（Base64/Hex）',
   `zip_version` int DEFAULT '0' COMMENT '资源版本号',
+  `require_card_verification` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否需要卡密验证',
   `created_by` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '创建人',
   `updated_by` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '更新人',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -49,6 +50,25 @@ CREATE TABLE IF NOT EXISTS `hook_info` (
   KEY `idx_app_id` (`app_id`),
   CONSTRAINT `fk_hook_app` FOREIGN KEY (`app_id`) REFERENCES `application` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Hook 配置表';
+-- ====================================
+-- 步骤 3: 为已有 hook_info 表补充 require_card_verification 字段
+-- ====================================
+SET @hook_col_exists = 0;
+SELECT COUNT(*) INTO @hook_col_exists
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = 'verfiy'
+  AND TABLE_NAME = 'hook_info'
+  AND COLUMN_NAME = 'require_card_verification';
+
+SET @sql = IF(@hook_col_exists = 0,
+    'ALTER TABLE hook_info ADD COLUMN `require_card_verification` tinyint(1) NOT NULL DEFAULT 0 COMMENT ''是否需要卡密验证''',
+    'SELECT ''字段 require_card_verification 已存在，跳过添加'' AS info');
+
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+UPDATE hook_info SET require_card_verification = 0 WHERE require_card_verification IS NULL;
 
 -- ====================================
 -- 完成提示
@@ -65,4 +85,9 @@ SELECT
         THEN '✓ hook_info 表已就绪'
         ELSE '✗ hook_info 表创建失败，请检查'
     END AS hook_info_status;
+SELECT 
+    CASE 
+        WHEN @hook_col_exists = 0 THEN '✓ 已确保 hook_info.require_card_verification 字段存在'
+        ELSE '- hook_info.require_card_verification 字段已存在'
+    END AS hook_require_card_status;
 

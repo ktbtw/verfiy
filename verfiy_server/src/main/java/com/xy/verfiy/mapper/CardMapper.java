@@ -53,6 +53,8 @@ public interface CardMapper {
 
     int deleteMachinesByCardId(@Param("cardId") Long cardId);
     int deleteMachine(@Param("cardId") Long cardId, @Param("machine") String machine);
+
+    Integer existsMachineForApp(@Param("appId") Long appId, @Param("machine") String machine);
 }
 
 

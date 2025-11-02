@@ -119,6 +119,18 @@
     <delete id="deleteMachine">
         DELETE FROM card_machine WHERE card_id = #{cardId} AND machine = #{machine}
     </delete>
+
+    <select id="existsMachineForApp" resultType="int">
+        SELECT 1
+        FROM card_machine cm
+        INNER JOIN card c ON cm.card_id = c.id
+        WHERE c.app_id = #{appId}
+          AND cm.machine = #{machine}
+          AND (c.disabled IS NULL OR c.disabled = 0)
+          AND (c.status IS NULL OR c.status NOT IN ('DISABLED', 'EXPIRED'))
+          AND (c.expire_at IS NULL OR c.expire_at > NOW())
+        LIMIT 1
+    </select>
 </mapper>
 
 

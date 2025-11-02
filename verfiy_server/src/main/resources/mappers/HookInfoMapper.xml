@@ -12,6 +12,7 @@
         <result property="dexData" column="dex_data" />
         <result property="zipData" column="zip_data" />
         <result property="zipVersion" column="zip_version" />
+        <result property="requireCardVerification" column="require_card_verification" />
         <result property="createdBy" column="created_by" />
         <result property="updatedBy" column="updated_by" />
         <result property="createdAt" column="created_at" />
@@ -73,6 +74,7 @@
             dex_data,
             zip_data,
             zip_version,
+            require_card_verification,
             created_by,
             updated_by,
             created_at,
@@ -86,6 +88,7 @@
             #{dexData},
             #{zipData},
             #{zipVersion},
+            #{requireCardVerification},
             #{createdBy},
             #{updatedBy},
             NOW(),
@@ -103,6 +106,7 @@
             dex_data = #{dexData},
             zip_data = #{zipData},
             zip_version = #{zipVersion},
+            require_card_verification = #{requireCardVerification},
             updated_by = #{updatedBy},
             updated_at = NOW()
         WHERE id = #{id} AND app_id = #{appId}

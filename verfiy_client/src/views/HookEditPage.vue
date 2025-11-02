@@ -17,7 +17,8 @@ const form = ref({
   packageName: '',
   version: '*',
   enabled: true,
-  zipVersion: 0
+  zipVersion: 0,
+  requireCardVerification: false
 })
 
 // Hook 配置列表
@@ -96,6 +97,7 @@ async function loadHookInfo() {
       form.value.version = data.version
       form.value.enabled = data.enabled
       form.value.zipVersion = data.zipVersion || 0
+      form.value.requireCardVerification = Boolean(data.requireCardVerification)
       
       // 解析 Hook 数据
       if (data.data) {
@@ -287,8 +289,20 @@ async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {
-      const base64 = reader.result as string
-      resolve(base64.split(',')[1])
+      if (typeof reader.result !== 'string') {
+        reject(new Error('文件读取结果无效'))
+        return
+      }
+
+      const parts = reader.result.split(',')
+      const base64 = parts.length > 1 ? parts[1] : parts[0]
+
+      if (!base64) {
+        reject(new Error('文件转换 Base64 失败'))
+        return
+      }
+
+      resolve(base64)
     }
     reader.onerror = reject
     reader.readAsDataURL(file)
@@ -353,6 +367,7 @@ async function saveHook() {
       packageName: form.value.packageName.trim(),
       version: form.value.version.trim() || '*',
       enabled: form.value.enabled,
+      requireCardVerification: form.value.requireCardVerification,
       zipVersion: form.value.zipVersion,
       data: JSON.stringify(hookData)
     }
@@ -457,6 +472,14 @@ onUnmounted(() => {
               <span class="switch-slider"></span>
               <span class="switch-text">启用此 Hook 配置</span>
             </label>
+          </div>
+          <div class="form-group">
+            <label class="switch-label">
+              <input type="checkbox" v-model="form.requireCardVerification" class="switch-input" />
+              <span class="switch-slider"></span>
+              <span class="switch-text">启用卡密验证</span>
+            </label>
+            <p class="form-hint">开启后，对应应用会出现卡密验证</p>
           </div>
         </div>
       </div>

@@ -21,7 +21,8 @@ const editForm = ref({
   data: '',
   dexData: '',
   zipData: '',
-  zipVersion: 0
+  zipVersion: 0,
+  requireCardVerification: false
 })
 
 // Hook 数据键值对列表
@@ -119,9 +120,20 @@ async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {
-      const base64 = reader.result as string
-      // 移除 data:xxx;base64, 前缀
-      resolve(base64.split(',')[1])
+      if (typeof reader.result !== 'string') {
+        reject(new Error('文件读取结果无效'))
+        return
+      }
+
+      const parts = reader.result.split(',')
+      const base64 = parts.length > 1 ? parts[1] : parts[0]
+
+      if (!base64) {
+        reject(new Error('文件转换 Base64 失败'))
+        return
+      }
+
+      resolve(base64)
     }
     reader.onerror = reject
     reader.readAsDataURL(file)
@@ -245,10 +257,18 @@ onMounted(() => {
         <div class="hook-header">
           <div class="hook-info">
             <h3 class="hook-package">{{ hook.packageName }}</h3>
-            <span class="hook-version">
-              <template v-if="hook.version === '*'">所有版本启用</template>
-              <template v-else>版本 {{ hook.version }}</template>
-            </span>
+            <div class="hook-tags">
+              <span class="hook-version">
+                <template v-if="hook.version === '*'">所有版本启用</template>
+                <template v-else>版本 {{ hook.version }}</template>
+              </span>
+              <span v-if="hook.requireCardVerification" class="hook-badge hook-badge-card">
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M5 8a5 5 0 1110 0v1h1a1 1 0 011 1v7a1 1 0 01-1 1H4a1 1 0 01-1-1V10a1 1 0 011-1h1V8zm2 0a3 3 0 016 0v1H7V8zm3 4a1 1 0 00-.993.883L9 13v1a1 1 0 001.993.117L11 14v-1a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                需验证卡密
+              </span>
+            </div>
           </div>
           <div class="hook-actions">
             <button 
@@ -335,6 +355,14 @@ onMounted(() => {
                     <span class="switch-slider"></span>
                     <span class="switch-text">启用此 Hook 配置</span>
                   </label>
+                </div>
+                <div class="form-group">
+                  <label class="switch-label">
+                    <input type="checkbox" v-model="editForm.requireCardVerification" class="switch-input" />
+                    <span class="switch-slider"></span>
+                    <span class="switch-text">验证卡密后才下发 Hook API</span>
+                  </label>
+                  <p class="form-hint">建议客户端在拉取 Hook 前完成卡密校验并携带 deviceId。</p>
                 </div>
               </div>
               
@@ -582,6 +610,35 @@ onMounted(() => {
   font-size: 13px;
   color: var(--text-2);
   font-family: 'SF Mono', 'Monaco', monospace;
+}
+
+.hook-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.hook-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.hook-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+.hook-badge-card {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: #2563eb;
 }
 
 .hook-actions {

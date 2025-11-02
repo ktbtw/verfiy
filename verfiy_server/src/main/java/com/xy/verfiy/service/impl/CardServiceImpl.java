@@ -340,6 +340,19 @@ public class CardServiceImpl implements CardService {
         }
         return total;
     }
+
+    @Override
+    public boolean existsVerifiedMachineForApp(Long appId, String machine) {
+        if (appId == null || machine == null) {
+            return false;
+        }
+        String trimmed = machine.trim();
+        if (trimmed.isEmpty()) {
+            return false;
+        }
+        Integer exists = cardMapper.existsMachineForApp(appId, trimmed);
+        return exists != null && exists > 0;
+    }
 }
 
 

@@ -13,6 +13,7 @@ public class HookInfo {
     private String dexData;
     private String zipData;
     private Integer zipVersion;
+    private Boolean requireCardVerification;
     private String createdBy;
     private String updatedBy;
     private LocalDateTime createdAt;
@@ -88,6 +89,14 @@ public class HookInfo {
 
     public void setZipVersion(Integer zipVersion) {
         this.zipVersion = zipVersion;
+    }
+
+    public Boolean getRequireCardVerification() {
+        return requireCardVerification;
+    }
+
+    public void setRequireCardVerification(Boolean requireCardVerification) {
+        this.requireCardVerification = requireCardVerification;
     }
 
     public String getCreatedBy() {

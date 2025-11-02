@@ -63,6 +63,11 @@ CREATE TABLE `hook_info` (
   `dex_data` longtext COLLATE utf8mb4_unicode_ci COMMENT 'Dex 数据（Base64/Hex）',
   `zip_data` longtext COLLATE utf8mb4_unicode_ci COMMENT '资源压缩包（Base64/Hex）',
   `zip_version` int DEFAULT '0' COMMENT '资源版本号',
+
+
+  `require_card_verification` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否需要卡密验证',
+
+  
   `created_by` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '创建人',
   `updated_by` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '更新人',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

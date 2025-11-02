@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xy.verfiy.domain.Application;
 import com.xy.verfiy.domain.HookInfo;
 import com.xy.verfiy.service.ApplicationService;
+import com.xy.verfiy.service.CardService;
 import com.xy.verfiy.service.HookInfoService;
 import com.xy.verfiy.util.CryptoUtils;
 import org.springframework.http.ResponseEntity;
@@ -23,11 +24,15 @@ public class HookInfoApiController {
 
     private final ApplicationService applicationService;
     private final HookInfoService hookInfoService;
+    private final CardService cardService;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public HookInfoApiController(ApplicationService applicationService, HookInfoService hookInfoService) {
+    public HookInfoApiController(ApplicationService applicationService,
+                                 HookInfoService hookInfoService,
+                                 CardService cardService) {
         this.applicationService = applicationService;
         this.hookInfoService = hookInfoService;
+        this.cardService = cardService;
     }
 
     @GetMapping
@@ -72,6 +77,15 @@ public class HookInfoApiController {
             return makeResponse(app, secret, notFound("Hook 已禁用"));
         }
 
+        if (Boolean.TRUE.equals(info.getRequireCardVerification())) {
+            if (deviceId == null || deviceId.isBlank()) {
+                return makeResponse(app, secret, forbidden("缺少设备标识，无法确认卡密验证"));
+            }
+            if (!cardService.existsVerifiedMachineForApp(app.getId(), deviceId)) {
+                return makeResponse(app, secret, forbidden("该设备未完成卡密验证"));
+            }
+        }
+
         Map<String, Object> body = new HashMap<>();
         body.put("success", true);
         body.put("packageName", info.getPackageName());
@@ -81,6 +95,7 @@ public class HookInfoApiController {
         body.put("zipData", info.getZipData());
         body.put("zipVersion", info.getZipVersion());
         body.put("updatedAt", info.getUpdatedAt());
+        body.put("requireCardVerification", info.getRequireCardVerification());
         if (deviceId != null) {
             body.put("deviceId", deviceId);
         }
@@ -99,6 +114,13 @@ public class HookInfoApiController {
         result.put("success", false);
         result.put("message", msg);
         return ResponseEntity.status(404).body(result);
+    }
+
+    private ResponseEntity<Map<String, Object>> forbidden(String msg) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", false);
+        result.put("message", msg);
+        return ResponseEntity.status(403).body(result);
     }
 
     private ResponseEntity<Map<String, Object>> makeResponse(Application app, String secret, ResponseEntity<Map<String, Object>> original) {

@@ -72,6 +72,9 @@ public class HookInfoServiceImpl implements HookInfoService {
         boolean enabled = hookInfo.getEnabled() == null
                 ? (existing != null ? Boolean.TRUE.equals(existing.getEnabled()) : true)
                 : Boolean.TRUE.equals(hookInfo.getEnabled());
+        boolean requireCardVerification = hookInfo.getRequireCardVerification() != null
+                ? Boolean.TRUE.equals(hookInfo.getRequireCardVerification())
+                : (existing != null && Boolean.TRUE.equals(existing.getRequireCardVerification()));
 
         if (existing == null) {
             HookInfo toInsert = new HookInfo();
@@ -83,6 +86,7 @@ public class HookInfoServiceImpl implements HookInfoService {
             toInsert.setDexData(trimNullable(hookInfo.getDexData()));
             toInsert.setZipData(trimNullable(hookInfo.getZipData()));
             toInsert.setZipVersion(hookInfo.getZipVersion() != null ? hookInfo.getZipVersion() : 0);
+            toInsert.setRequireCardVerification(requireCardVerification);
             toInsert.setCreatedBy(owner);
             toInsert.setUpdatedBy(owner);
             hookInfoMapper.insert(toInsert);
@@ -96,6 +100,7 @@ public class HookInfoServiceImpl implements HookInfoService {
         existing.setDexData(trimNullable(hookInfo.getDexData()));
         existing.setZipData(trimNullable(hookInfo.getZipData()));
         existing.setZipVersion(hookInfo.getZipVersion());
+        existing.setRequireCardVerification(requireCardVerification);
         existing.setUpdatedBy(owner);
         hookInfoMapper.update(existing);
         return hookInfoMapper.findExact(appId, pkg, version);
