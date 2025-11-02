@@ -11,6 +11,7 @@ const routes = [
   { path: '/app-settings', component: () => import('../views/AppSettingsPage.vue'), meta: { requiresAuth: true } },
   { path: '/callback', component: () => import('../views/CallbackPage.vue'), meta: { requiresAuth: true } },
   { path: '/api-docs', component: () => import('../views/ApiDocsPage.vue'), meta: { requiresAuth: true } },
+  { path: '/hook-management', component: () => import('../views/HookManagementPage.vue'), meta: { requiresAuth: true } },
   { path: '/login', component: LoginPage },
   { path: '/register', component: RegisterPage },
 ]

@@ -20,6 +20,8 @@ public class Application {
     private String redeemExtra;
     // 自定义返回参数的合并时机：ALWAYS / SUCCESS_ONLY / FAILURE_ONLY
     private String redeemExtraMode;
+    // 应用类型：NORMAL / XPOSED
+    private String appType;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -51,6 +53,8 @@ public class Application {
     public void setRedeemExtra(String redeemExtra) { this.redeemExtra = redeemExtra; }
     public String getRedeemExtraMode() { return redeemExtraMode; }
     public void setRedeemExtraMode(String redeemExtraMode) { this.redeemExtraMode = redeemExtraMode; }
+    public String getAppType() { return appType; }
+    public void setAppType(String appType) { this.appType = appType; }
 }
 
 

@@ -29,10 +29,13 @@ public class ApplicationController {
     @PostMapping
     public Application create(@RequestParam String name,
                               @RequestParam(required = false) String description,
+                              @RequestParam(required = false, defaultValue = "NORMAL") String appType,
                               Authentication authentication,
                               HttpSession session) {
         String owner = authentication != null ? authentication.getName() : "admin";
         Application app = applicationService.create(name, description, owner);
+        app.setAppType(appType);
+        applicationService.update(app);
         session.setAttribute("currentAppId", app.getId());
         return app;
     }
@@ -98,6 +101,7 @@ public class ApplicationController {
         result.put("version", app.getVersion());
         result.put("changelog", app.getChangelog());
         result.put("redeemExtra", app.getRedeemExtra());
+        result.put("appType", app.getAppType());
         return result;
     }
 

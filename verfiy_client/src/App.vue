@@ -9,6 +9,7 @@ const isAuthenticated = ref(false)
 const username = ref('')
 const currentAppId = ref<number | null>(null)
 const currentAppName = ref('')
+const currentAppType = ref<string>('NORMAL')
 
 // 判断是否在应用管理相关页面
 const isInAppContext = computed(() => {
@@ -16,8 +17,12 @@ const isInAppContext = computed(() => {
          (route.path === '/cards' || 
           route.path === '/app-settings' || 
           route.path === '/callback' || 
-          route.path === '/api-docs')
+          route.path === '/api-docs' ||
+          route.path === '/hook-management')
 })
+
+// 判断是否为 Xposed 应用
+const isXposedApp = computed(() => currentAppType.value === 'XPOSED')
 
 async function checkAuth() {
   try {
@@ -48,13 +53,16 @@ async function checkCurrentApp() {
       const data = await resp.json()
       currentAppId.value = data?.id || null
       currentAppName.value = data?.name || ''
+      currentAppType.value = data?.appType || 'NORMAL'
     } else {
       currentAppId.value = null
       currentAppName.value = ''
+      currentAppType.value = 'NORMAL'
     }
   } catch (e) {
     currentAppId.value = null
     currentAppName.value = ''
+    currentAppType.value = 'NORMAL'
   }
 }
 
@@ -92,6 +100,7 @@ async function logout() {
 function backToApps() {
   currentAppId.value = null
   currentAppName.value = ''
+  currentAppType.value = 'NORMAL'
   router.push('/apps')
 }
 
@@ -158,22 +167,34 @@ watch(() => route.path, () => {
                 应用设置
               </a>
             </router-link>
-            <router-link to="/callback" custom v-slot="{ href, navigate, isActive }">
-              <a :href="href" @click="navigate" :class="{ active: isActive }">
-                <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd" />
-                </svg>
-                增加回参
-              </a>
-            </router-link>
-            <router-link to="/api-docs" custom v-slot="{ href, navigate, isActive }">
-              <a :href="href" @click="navigate" :class="{ active: isActive }">
-                <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
-                </svg>
-                调用示例
-              </a>
-            </router-link>
+            <template v-if="!isXposedApp">
+              <router-link to="/callback" custom v-slot="{ href, navigate, isActive }">
+                <a :href="href" @click="navigate" :class="{ active: isActive }">
+                  <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                  </svg>
+                  增加回参
+                </a>
+              </router-link>
+              <router-link to="/api-docs" custom v-slot="{ href, navigate, isActive }">
+                <a :href="href" @click="navigate" :class="{ active: isActive }">
+                  <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
+                  </svg>
+                  调用示例
+                </a>
+              </router-link>
+            </template>
+            <template v-else>
+              <router-link to="/hook-management" custom v-slot="{ href, navigate, isActive }">
+                <a :href="href" @click="navigate" :class="{ active: isActive }">
+                  <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                  </svg>
+                  Hook 管理
+                </a>
+              </router-link>
+            </template>
             <a href="#" @click.prevent="backToApps" class="nav-back">
               <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />

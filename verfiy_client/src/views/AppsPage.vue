@@ -18,6 +18,7 @@ type Application = {
   secretKey?: string
   secure?: boolean
   encryptionAlg?: string
+  appType?: string
 }
 
 type User = {
@@ -38,6 +39,7 @@ const selectedAppId = ref<number | null>(null)
 const showCreateDialog = ref(false)
 const newAppName = ref('')
 const newAppDescription = ref('')
+const newAppType = ref('NORMAL')
 const creating = ref(false)
 const showToast = ref(false)
 const toastMessage = ref('')
@@ -158,6 +160,7 @@ async function createApp() {
     if (newAppDescription.value.trim()) {
       formData.append('description', newAppDescription.value.trim())
     }
+    formData.append('appType', newAppType.value)
     
     await http.post('/admin/apps', formData, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -167,6 +170,7 @@ async function createApp() {
     showCreateDialog.value = false
     newAppName.value = ''
     newAppDescription.value = ''
+    newAppType.value = 'NORMAL'
     await fetchApps()
   } catch (e: any) {
     console.error('创建应用失败:', e)
@@ -180,12 +184,14 @@ function openCreateDialog() {
   showCreateDialog.value = true
   newAppName.value = ''
   newAppDescription.value = ''
+  newAppType.value = 'NORMAL'
 }
 
 function closeCreateDialog() {
   showCreateDialog.value = false
   newAppName.value = ''
   newAppDescription.value = ''
+  newAppType.value = 'NORMAL'
 }
 
 function copyToClipboard(text: string, label: string) {
@@ -795,6 +801,22 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+        
+        <div class="app-type-badge">
+          <span v-if="a.appType === 'XPOSED'" class="type-tag xposed-tag">
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+            Xposed应用
+          </span>
+          <span v-else class="type-tag normal-tag">
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
+              <path fill-rule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clip-rule="evenodd" />
+            </svg>
+            普通应用
+          </span>
+        </div>
       </UiCard>
     </transition-group>
     
@@ -817,6 +839,33 @@ onUnmounted(() => {
             </div>
             
             <div class="modal-body">
+              <div class="form-group">
+                <label class="form-label">应用类型 *</label>
+                <div class="app-type-selector">
+                  <label class="type-option" :class="{ 'selected': newAppType === 'NORMAL' }">
+                    <input type="radio" v-model="newAppType" value="NORMAL" />
+                    <div class="type-card">
+                      <svg class="type-icon" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
+                        <path fill-rule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clip-rule="evenodd" />
+                      </svg>
+                      <span class="type-label">普通应用</span>
+                      <span class="type-desc">卡密验证系统</span>
+                    </div>
+                  </label>
+                  <label class="type-option" :class="{ 'selected': newAppType === 'XPOSED' }">
+                    <input type="radio" v-model="newAppType" value="XPOSED" />
+                    <div class="type-card">
+                      <svg class="type-icon" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                      </svg>
+                      <span class="type-label">Xposed 应用</span>
+                      <span class="type-desc">Hook 配置管理</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+              
               <div class="form-group">
                 <label class="form-label">应用名称 *</label>
                 <input 
@@ -3634,6 +3683,140 @@ onUnmounted(() => {
   
   .quota-value.highlight {
     color: #34d399;
+  }
+}
+
+/* 应用类型选择器样式 */
+.app-type-selector {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.type-option {
+  cursor: pointer;
+  display: block;
+}
+
+.type-option input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.type-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 16px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.type-option:hover .type-card {
+  border-color: rgba(79, 70, 229, 0.3);
+  background: rgba(255, 255, 255, 0.95);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
+}
+
+.type-option.selected .type-card {
+  border-color: var(--brand);
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.05), rgba(124, 58, 237, 0.05));
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.type-icon {
+  width: 32px;
+  height: 32px;
+  color: var(--text-2);
+  transition: all 0.2s ease;
+}
+
+.type-option.selected .type-icon {
+  color: var(--brand);
+  transform: scale(1.1);
+}
+
+.type-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.type-desc {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+@media (prefers-color-scheme: dark) {
+  .type-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .type-option:hover .type-card {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(124, 58, 237, 0.4);
+  }
+  
+  .type-option.selected .type-card {
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.1), rgba(124, 58, 237, 0.1));
+    border-color: rgba(124, 58, 237, 0.6);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+  }
+}
+
+/* 应用类型标签 */
+.app-type-badge {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.type-tag svg {
+  width: 14px;
+  height: 14px;
+}
+
+.xposed-tag {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.1), rgba(79, 70, 229, 0.1));
+  color: var(--brand);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+}
+
+.normal-tag {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.1));
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+  .xposed-tag {
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(79, 70, 229, 0.15));
+    color: #c084fc;
+    border-color: rgba(124, 58, 237, 0.4);
+  }
+  
+  .normal-tag {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.15));
+    color: #60a5fa;
+    border-color: rgba(59, 130, 246, 0.4);
   }
 }
 </style>

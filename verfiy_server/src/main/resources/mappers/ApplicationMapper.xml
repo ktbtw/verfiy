@@ -18,6 +18,7 @@
         <result property="createdAt" column="created_at" />
         <result property="redeemExtra" column="redeem_extra" />
         <result property="redeemExtraMode" column="redeem_extra_mode" />
+        <result property="appType" column="app_type" />
     </resultMap>
 
     <insert id="insert" parameterType="com.xy.verfiy.domain.Application" useGeneratedKeys="true" keyProperty="id">
@@ -25,12 +26,12 @@
             name, description, owner,
             api_key, secret_key,
             secure, encryption_alg,
-            created_at, redeem_extra_mode
+            created_at, redeem_extra_mode, app_type
         ) VALUES(
             #{name}, #{description}, #{owner},
             #{apiKey}, #{secretKey},
             #{secure}, #{encryptionAlg},
-            NOW(), #{redeemExtraMode}
+            NOW(), #{redeemExtraMode}, #{appType}
         )
     </insert>
 
@@ -63,6 +64,7 @@
             <!-- 允许清空 redeemExtra（包括空字符串） -->
             <if test="redeemExtra != null">redeem_extra = #{redeemExtra},</if>
             <if test="redeemExtraMode != null">redeem_extra_mode = #{redeemExtraMode},</if>
+            <if test="appType != null">app_type = #{appType},</if>
             <!-- 使用一个始终为 true 的条件确保 SET 子句不为空 -->
             <if test="true">id = #{id}</if>
         </set>

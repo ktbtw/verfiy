@@ -44,6 +44,7 @@ CREATE TABLE `application` (
   `api_key` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'API密钥',
   `secret_key` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '签名密钥',
   `redeem_extra_mode` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT 'SUCCESS_ONLY' COMMENT '返回参数模式（ALWAYS/SUCCESS_ONLY/FAILURE_ONLY）',
+  `app_type` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT 'NORMAL' COMMENT '应用类型（NORMAL/XPOSED）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_api_key` (`api_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='应用表';
