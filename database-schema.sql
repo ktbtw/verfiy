@@ -49,6 +49,30 @@ CREATE TABLE `application` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='应用表';
 
 -- ----------------------------
+-- 表结构: hook_info (Hook 配置表)
+-- ----------------------------
+DROP TABLE IF EXISTS `hook_info`;
+CREATE TABLE `hook_info` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `app_id` bigint NOT NULL COMMENT '所属应用ID',
+  `package_name` varchar(191) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '包名',
+  `version` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '*' COMMENT '版本号，* 表示通配',
+  `enabled` tinyint(1) NOT NULL DEFAULT '1' COMMENT '是否启用',
+  `data` longtext COLLATE utf8mb4_unicode_ci COMMENT 'Hook 配置数据(JSON)',
+  `dex_data` longtext COLLATE utf8mb4_unicode_ci COMMENT 'Dex 数据（Base64/Hex）',
+  `zip_data` longtext COLLATE utf8mb4_unicode_ci COMMENT '资源压缩包（Base64/Hex）',
+  `zip_version` int DEFAULT '0' COMMENT '资源版本号',
+  `created_by` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '创建人',
+  `updated_by` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '更新人',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_app_pkg_ver` (`app_id`,`package_name`,`version`),
+  KEY `idx_app_id` (`app_id`),
+  CONSTRAINT `fk_hook_app` FOREIGN KEY (`app_id`) REFERENCES `application` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Hook 配置表';
+
+-- ----------------------------
 -- 表结构: card (卡密表)
 -- ----------------------------
 DROP TABLE IF EXISTS `card`;

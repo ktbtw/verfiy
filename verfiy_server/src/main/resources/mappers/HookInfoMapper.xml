@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xy.verfiy.mapper.HookInfoMapper">
+
+    <resultMap id="HookInfoResult" type="com.xy.verfiy.domain.HookInfo">
+        <id property="id" column="id" />
+        <result property="appId" column="app_id" />
+        <result property="packageName" column="package_name" />
+        <result property="version" column="version" />
+        <result property="enabled" column="enabled" />
+        <result property="data" column="data" />
+        <result property="dexData" column="dex_data" />
+        <result property="zipData" column="zip_data" />
+        <result property="zipVersion" column="zip_version" />
+        <result property="createdBy" column="created_by" />
+        <result property="updatedBy" column="updated_by" />
+        <result property="createdAt" column="created_at" />
+        <result property="updatedAt" column="updated_at" />
+    </resultMap>
+
+    <select id="listByApp" resultMap="HookInfoResult">
+        SELECT *
+        FROM hook_info
+        WHERE app_id = #{appId}
+        ORDER BY package_name ASC, version ASC
+    </select>
+
+    <select id="findById" resultMap="HookInfoResult">
+        SELECT *
+        FROM hook_info
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="findByIdAndAppId" resultMap="HookInfoResult">
+        SELECT *
+        FROM hook_info
+        WHERE id = #{id} AND app_id = #{appId}
+        LIMIT 1
+    </select>
+
+    <select id="findExact" resultMap="HookInfoResult">
+        SELECT *
+        FROM hook_info
+        WHERE app_id = #{appId}
+          AND package_name = #{packageName}
+          AND version = #{version}
+        LIMIT 1
+    </select>
+
+    <select id="findEffective" resultMap="HookInfoResult">
+        SELECT *
+        FROM hook_info
+        WHERE app_id = #{appId}
+          AND package_name = #{packageName}
+          AND enabled = 1
+          AND (version = #{version} OR version = '*')
+        ORDER BY CASE
+            WHEN version = #{version} THEN 0
+            WHEN version = '*' THEN 1
+            ELSE 2
+        END
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.xy.verfiy.domain.HookInfo" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO hook_info (
+            app_id,
+            package_name,
+            version,
+            enabled,
+            data,
+            dex_data,
+            zip_data,
+            zip_version,
+            created_by,
+            updated_by,
+            created_at,
+            updated_at
+        ) VALUES (
+            #{appId},
+            #{packageName},
+            #{version},
+            #{enabled},
+            #{data},
+            #{dexData},
+            #{zipData},
+            #{zipVersion},
+            #{createdBy},
+            #{updatedBy},
+            NOW(),
+            NOW()
+        )
+    </insert>
+
+    <update id="update" parameterType="com.xy.verfiy.domain.HookInfo">
+        UPDATE hook_info
+        SET
+            package_name = #{packageName},
+            version = #{version},
+            enabled = #{enabled},
+            data = #{data},
+            dex_data = #{dexData},
+            zip_data = #{zipData},
+            zip_version = #{zipVersion},
+            updated_by = #{updatedBy},
+            updated_at = NOW()
+        WHERE id = #{id} AND app_id = #{appId}
+    </update>
+
+    <update id="updateEnabled">
+        UPDATE hook_info
+        SET enabled = #{enabled},
+            updated_by = #{updatedBy},
+            updated_at = NOW()
+        WHERE id = #{id} AND app_id = #{appId}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM hook_info
+        WHERE id = #{id} AND app_id = #{appId}
+    </delete>
+
+</mapper>
+
+

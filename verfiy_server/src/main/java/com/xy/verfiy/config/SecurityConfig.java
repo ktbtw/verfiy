@@ -44,7 +44,7 @@ public class SecurityConfig {
                 .csrfTokenRepository(tokenRepository)
                 .csrfTokenRequestHandler(requestHandler)
                 // 仅对公共 API 禁用 CSRF（卡密验证、公告接口、认证接口、显式获取CSRF Token接口）
-                .ignoringRequestMatchers("/api/redeem/**", "/api/notice/**", "/api/auth/**", "/api/csrf-token")
+                .ignoringRequestMatchers("/api/redeem/**", "/api/notice/**", "/api/auth/**", "/api/csrf-token", "/api/hook/**")
                 // H2 控制台（仅开发环境）
                 .ignoringRequestMatchers("/h2/**")
             )
@@ -54,7 +54,7 @@ public class SecurityConfig {
                 // 公开的认证接口
                 .requestMatchers("/api/auth/**").permitAll()
                 // 公开的 API 接口（卡密验证、公告、显式获取 CSRF Token）
-                .requestMatchers("/api/redeem/**", "/api/notice/**", "/api/csrf-token").permitAll()
+                .requestMatchers("/api/redeem/**", "/api/notice/**", "/api/csrf-token", "/api/hook/**").permitAll()
                 // 静态资源和前端路由
                 .requestMatchers("/", "/login", "/register", "/apps", "/cards").permitAll()
                 .requestMatchers("/assets/**", "/vite.svg", "/*.js", "/*.css", "/*.html").permitAll()

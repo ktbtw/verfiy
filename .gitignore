@@ -56,3 +56,6 @@ deploy.sh
 
 # 打包文件
 *.tar.gz
+
+#hook目录
+Hook_Internet/
