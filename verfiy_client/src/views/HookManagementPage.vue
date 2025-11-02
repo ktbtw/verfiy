@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import http from '../utils/http'
 // @ts-ignore
 import UiPageHeader from '../components/ui/PageHeader.vue'
 // @ts-ignore
 import UiButton from '../components/ui/Button.vue'
+
+const router = useRouter()
 
 const loading = ref(false)
 const appInfo = ref<any>(null)
@@ -20,6 +23,16 @@ const editForm = ref({
   zipData: '',
   zipVersion: 0
 })
+
+// Hook 数据键值对列表
+const hookDataParams = ref<Array<{ id: number; key: string; value: string }>>([])
+let nextParamId = 1
+
+// 文件上传相关
+const dexFile = ref<File | null>(null)
+const zipFile = ref<File | null>(null)
+const dexFileInput = ref<HTMLInputElement | null>(null)
+const zipFileInput = ref<HTMLInputElement | null>(null)
 const saving = ref(false)
 const toast = ref({
   show: false,
@@ -55,31 +68,64 @@ async function loadHookList() {
 }
 
 function openCreateDialog() {
-  editForm.value = {
-    id: null,
-    packageName: '',
-    version: '*',
-    enabled: true,
-    data: '',
-    dexData: '',
-    zipData: '',
-    zipVersion: 0
-  }
-  showEditDialog.value = true
+  router.push('/hook-edit')
 }
 
 function openEditDialog(hook: any) {
-  editForm.value = {
-    id: hook.id,
-    packageName: hook.packageName,
-    version: hook.version,
-    enabled: hook.enabled,
-    data: hook.data || '',
-    dexData: hook.dexData || '',
-    zipData: hook.zipData || '',
-    zipVersion: hook.zipVersion || 0
+  router.push(`/hook-edit/${hook.id}`)
+}
+
+function addHookParam() {
+  hookDataParams.value.push({
+    id: nextParamId++,
+    key: '',
+    value: ''
+  })
+}
+
+function removeHookParam(id: number) {
+  hookDataParams.value = hookDataParams.value.filter(p => p.id !== id)
+}
+
+async function handleDexFileChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  if (target.files && target.files[0]) {
+    dexFile.value = target.files[0]
   }
-  showEditDialog.value = true
+}
+
+async function handleZipFileChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  if (target.files && target.files[0]) {
+    zipFile.value = target.files[0]
+  }
+}
+
+function clearDexFile() {
+  dexFile.value = null
+  if (dexFileInput.value) {
+    dexFileInput.value.value = ''
+  }
+}
+
+function clearZipFile() {
+  zipFile.value = null
+  if (zipFileInput.value) {
+    zipFileInput.value.value = ''
+  }
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const base64 = reader.result as string
+      // 移除 data:xxx;base64, 前缀
+      resolve(base64.split(',')[1])
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
 }
 
 async function saveHook() {
@@ -90,10 +136,29 @@ async function saveHook() {
   
   saving.value = true
   try {
-    await http.post('/admin/hook-info', {
-      ...editForm.value,
-      appId: appInfo.value.id
+    // 构建 Hook 数据 JSON
+    const hookData: any = {}
+    hookDataParams.value.forEach(param => {
+      if (param.key.trim()) {
+        hookData[param.key.trim()] = param.value
+      }
     })
+    
+    const payload: any = {
+      ...editForm.value,
+      appId: appInfo.value.id,
+      data: Object.keys(hookData).length > 0 ? JSON.stringify(hookData) : null
+    }
+    
+    // 处理文件上传
+    if (dexFile.value) {
+      payload.dexData = await fileToBase64(dexFile.value)
+    }
+    if (zipFile.value) {
+      payload.zipData = await fileToBase64(zipFile.value)
+    }
+    
+    await http.post('/admin/hook-info', payload)
     showToast('保存成功', 'success')
     showEditDialog.value = false
     await loadHookList()
@@ -229,9 +294,19 @@ onMounted(() => {
     <teleport to="body">
       <transition name="modal-fade">
         <div v-if="showEditDialog" class="modal-overlay" @click="showEditDialog = false">
-          <div class="modal-container" @click.stop>
+          <div class="modal-container hook-edit-modal" @click.stop>
             <div class="modal-header">
-              <h3 class="modal-title">{{ editForm.id ? '编辑Hook配置' : '新建Hook配置' }}</h3>
+              <div class="header-content">
+                <div class="modal-icon-wrapper">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 class="modal-title">{{ editForm.id ? '编辑 Hook 配置' : '新建 Hook 配置' }}</h3>
+                  <p class="modal-subtitle">配置应用的 Hook 行为和数据</p>
+                </div>
+              </div>
               <button class="modal-close" @click="showEditDialog = false">
                 <svg viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
@@ -240,47 +315,146 @@ onMounted(() => {
             </div>
             
             <div class="modal-body">
-              <div class="form-group">
-                <label class="form-label">包名 *</label>
-                <input v-model="editForm.packageName" type="text" class="form-input" placeholder="com.example.app" />
+              <!-- 基本信息 -->
+              <div class="section">
+                <h4 class="section-title">基本信息</h4>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">包名 *</label>
+                    <input v-model="editForm.packageName" type="text" class="form-input" placeholder="com.example.app" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">版本号</label>
+                    <input v-model="editForm.version" type="text" class="form-input" placeholder="* 表示所有版本" />
+                  </div>
+                </div>
+                
+                <div class="form-group">
+                  <label class="switch-label">
+                    <input type="checkbox" v-model="editForm.enabled" class="switch-input" />
+                    <span class="switch-slider"></span>
+                    <span class="switch-text">启用此 Hook 配置</span>
+                  </label>
+                </div>
               </div>
               
-              <div class="form-group">
-                <label class="form-label">版本</label>
-                <input v-model="editForm.version" type="text" class="form-input" placeholder="* 表示通配所有版本" />
+              <!-- Hook 数据配置 -->
+              <div class="section">
+                <div class="section-header-with-action">
+                  <h4 class="section-title">Hook 数据</h4>
+                  <button @click="addHookParam" class="btn-add-param">
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                    </svg>
+                    添加参数
+                  </button>
+                </div>
+                
+                <div v-if="hookDataParams.length === 0" class="empty-params">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z" />
+                    <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z" />
+                    <path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z" />
+                  </svg>
+                  <p>暂无 Hook 参数</p>
+                </div>
+                
+                <div v-else class="params-list">
+                  <div v-for="param in hookDataParams" :key="param.id" class="param-item">
+                    <input v-model="param.key" type="text" class="param-key" placeholder="键名" />
+                    <span class="param-separator">:</span>
+                    <input v-model="param.value" type="text" class="param-value" placeholder="值" />
+                    <button @click="removeHookParam(param.id)" class="btn-remove-param">
+                      <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
               </div>
               
-              <div class="form-group">
-                <label class="form-label">
-                  <input type="checkbox" v-model="editForm.enabled" />
-                  启用此Hook
-                </label>
-              </div>
-              
-              <div class="form-group">
-                <label class="form-label">Hook数据 (JSON)</label>
-                <textarea v-model="editForm.data" class="form-textarea" rows="4" placeholder='{"data": []}'></textarea>
-              </div>
-              
-              <div class="form-group">
-                <label class="form-label">Dex数据 (Base64)</label>
-                <textarea v-model="editForm.dexData" class="form-textarea" rows="3" placeholder="Base64编码的Dex文件"></textarea>
-              </div>
-              
-              <div class="form-group">
-                <label class="form-label">Zip数据 (Base64)</label>
-                <textarea v-model="editForm.zipData" class="form-textarea" rows="3" placeholder="Base64编码的Zip资源包"></textarea>
-              </div>
-              
-              <div class="form-group">
-                <label class="form-label">资源版本号</label>
-                <input v-model.number="editForm.zipVersion" type="number" class="form-input" placeholder="0" />
+              <!-- 文件上传 -->
+              <div class="section">
+                <h4 class="section-title">文件资源</h4>
+                
+                <div class="form-group">
+                  <label class="form-label">Dex 文件</label>
+                  <div class="file-upload-area">
+                    <input 
+                      ref="dexFileInput"
+                      type="file" 
+                      accept=".dex" 
+                      @change="handleDexFileChange"
+                      style="display: none"
+                    />
+                    <div v-if="!dexFile" class="upload-placeholder" @click="dexFileInput?.click()">
+                      <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                      </svg>
+                      <span>点击上传 .dex 文件</span>
+                    </div>
+                    <div v-else class="uploaded-file">
+                      <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+                      </svg>
+                      <span class="file-name">{{ dexFile.name }}</span>
+                      <span class="file-size">({{ (dexFile.size / 1024).toFixed(2) }} KB)</span>
+                      <button @click="clearDexFile" class="btn-clear-file">
+                        <svg viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="form-group">
+                  <label class="form-label">Zip 资源包</label>
+                  <div class="file-upload-area">
+                    <input 
+                      ref="zipFileInput"
+                      type="file" 
+                      accept=".zip" 
+                      @change="handleZipFileChange"
+                      style="display: none"
+                    />
+                    <div v-if="!zipFile" class="upload-placeholder" @click="zipFileInput?.click()">
+                      <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                      </svg>
+                      <span>点击上传 .zip 文件</span>
+                    </div>
+                    <div v-else class="uploaded-file">
+                      <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M2 6a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V17a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+                      </svg>
+                      <span class="file-name">{{ zipFile.name }}</span>
+                      <span class="file-size">({{ (zipFile.size / 1024).toFixed(2) }} KB)</span>
+                      <button @click="clearZipFile" class="btn-clear-file">
+                        <svg viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="form-group">
+                  <label class="form-label">资源版本号</label>
+                  <input v-model.number="editForm.zipVersion" type="number" class="form-input" placeholder="0" min="0" />
+                  <p class="form-hint">客户端会根据版本号判断是否需要更新资源</p>
+                </div>
               </div>
             </div>
             
             <div class="modal-footer">
               <button class="btn btn-secondary" @click="showEditDialog = false">取消</button>
-              <UiButton @click="saveHook" :loading="saving">保存</UiButton>
+              <UiButton @click="saveHook" :loading="saving">
+                <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h5a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z" />
+                </svg>
+                保存配置
+              </UiButton>
             </div>
           </div>
         </div>
@@ -519,10 +693,15 @@ onMounted(() => {
   backdrop-filter: blur(20px);
   border-radius: 16px;
   width: 100%;
-  max-width: 600px;
+  max-width: 700px;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.hook-edit-modal {
+  max-width: 800px;
 }
 
 .modal-header {

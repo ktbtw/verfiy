@@ -18,7 +18,8 @@ const isInAppContext = computed(() => {
           route.path === '/app-settings' || 
           route.path === '/callback' || 
           route.path === '/api-docs' ||
-          route.path === '/hook-management')
+          route.path === '/hook-management' ||
+          route.path.startsWith('/hook-edit'))
 })
 
 // 判断是否为 Xposed 应用
