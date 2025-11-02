@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import http from '../utils/http'
 // @ts-ignore
@@ -20,15 +20,50 @@ const form = ref({
   zipVersion: 0
 })
 
-// Hook 数据键值对列表
-const hookDataParams = ref<Array<{ id: number; key: string; value: string }>>([])
-let nextParamId = 1
+// Hook 配置列表
+type HookItem = {
+  id: number
+  className: string
+  methodName: string
+  methodParamTypes: string[]
+  setResultClass: string
+  setResultData: string
+  setParams: Array<{ paramClass: string; paramData: string }>
+  isIntercept: boolean
+}
+
+const hookItems = ref<HookItem[]>([])
+let nextHookId = 1
+
+// Dex 配置
+const dexConfig = ref({
+  dexClassName: '',
+  dexMethodName: '',
+  dexMethodParamTypes: [] as string[]
+})
 
 // 文件上传相关
 const dexFile = ref<File | null>(null)
 const zipFile = ref<File | null>(null)
 const dexFileInput = ref<HTMLInputElement | null>(null)
 const zipFileInput = ref<HTMLInputElement | null>(null)
+
+// Java 基本类型列表
+const javaBasicTypes = [
+  { label: 'int', value: 'int' },
+  { label: 'long', value: 'long' },
+  { label: 'float', value: 'float' },
+  { label: 'double', value: 'double' },
+  { label: 'boolean', value: 'boolean' },
+  { label: 'byte', value: 'byte' },
+  { label: 'char', value: 'char' },
+  { label: 'short', value: 'short' },
+  { label: 'String', value: 'String' },
+  { label: 'void', value: 'void' }
+]
+
+// 类型助手状态
+const typeHelperOpen = ref<{ hookId: number; field: 'result' | 'param'; paramIndex?: number } | null>(null)
 
 const saving = ref(false)
 const toast = ref({
@@ -60,19 +95,31 @@ async function loadHookInfo() {
       form.value.enabled = data.enabled
       form.value.zipVersion = data.zipVersion || 0
       
-      // 解析 Hook 数据为键值对
+      // 解析 Hook 数据
       if (data.data) {
         try {
           const parsed = JSON.parse(data.data)
-          if (parsed && typeof parsed === 'object') {
-            hookDataParams.value = Object.entries(parsed).map(([key, value]) => ({
-              id: nextParamId++,
-              key: key,
-              value: String(value)
+          if (parsed && parsed.data && Array.isArray(parsed.data)) {
+            hookItems.value = parsed.data.map((item: any) => ({
+              id: nextHookId++,
+              className: item.ClassName || '',
+              methodName: item.MethodName || '',
+              methodParamTypes: item.MethodParamType || [],
+              setResultClass: item.SetResult?.SetClass || '',
+              setResultData: item.SetResult?.SetData || '',
+              setParams: item.SetParam || [],
+              isIntercept: item.IsIntercept || false
             }))
           }
+          
+          // 解析 Dex 配置
+          if (parsed.dexData) {
+            dexConfig.value.dexClassName = parsed.dexData.DexClassName || ''
+            dexConfig.value.dexMethodName = parsed.dexData.DexMethodName || ''
+            dexConfig.value.dexMethodParamTypes = parsed.dexData.DexMethodParamTypes || []
+          }
         } catch (e) {
-          // 忽略解析错误
+          console.error('解析 Hook 数据失败:', e)
         }
       }
     }
@@ -83,16 +130,67 @@ async function loadHookInfo() {
   }
 }
 
-function addHookParam() {
-  hookDataParams.value.push({
-    id: nextParamId++,
-    key: '',
-    value: ''
+function addHookItem() {
+  hookItems.value.push({
+    id: nextHookId++,
+    className: '',
+    methodName: '',
+    methodParamTypes: [],
+    setResultClass: '',
+    setResultData: '',
+    setParams: [],
+    isIntercept: false
   })
 }
 
-function removeHookParam(id: number) {
-  hookDataParams.value = hookDataParams.value.filter(p => p.id !== id)
+function removeHookItem(id: number) {
+  hookItems.value = hookItems.value.filter(h => h.id !== id)
+}
+
+function addMethodParam(hookItem: HookItem) {
+  if (!hookItem.methodParamTypes) {
+    hookItem.methodParamTypes = []
+  }
+  hookItem.methodParamTypes.push('')
+}
+
+function removeMethodParam(hookItem: HookItem, index: number) {
+  hookItem.methodParamTypes.splice(index, 1)
+}
+
+function addSetParam(hookItem: HookItem) {
+  if (!hookItem.setParams) {
+    hookItem.setParams = []
+  }
+  hookItem.setParams.push({ paramClass: '', paramData: '' })
+}
+
+function removeSetParam(hookItem: HookItem, index: number) {
+  hookItem.setParams.splice(index, 1)
+}
+
+function toggleTypeHelper(hookId: number, field: 'result' | 'param', paramIndex?: number) {
+  if (typeHelperOpen.value?.hookId === hookId && typeHelperOpen.value?.field === field && typeHelperOpen.value?.paramIndex === paramIndex) {
+    typeHelperOpen.value = null
+  } else {
+    typeHelperOpen.value = { hookId, field, paramIndex }
+  }
+}
+
+function selectType(type: string, hookItem: HookItem, field: 'result' | 'param', paramIndex?: number) {
+  if (field === 'result') {
+    hookItem.setResultClass = type
+  } else if (field === 'param' && paramIndex !== undefined) {
+    hookItem.methodParamTypes[paramIndex] = type
+  }
+  typeHelperOpen.value = null
+}
+
+function closeTypeHelper(event: MouseEvent) {
+  const target = event.target as HTMLElement
+  if (!target.closest('.type-helper-wrapper')) {
+    typeHelperOpen.value = null
+  }
 }
 
 async function handleDexFileChange(event: Event) {
@@ -143,12 +241,47 @@ async function saveHook() {
   
   saving.value = true
   try {
-    const hookData: any = {}
-    hookDataParams.value.forEach(param => {
-      if (param.key.trim()) {
-        hookData[param.key.trim()] = param.value
+    // 构建符合客户端格式的 Hook 数据
+    const hookData: any = {
+      data: hookItems.value.map(item => ({
+        ClassName: item.className,
+        MethodName: item.methodName,
+        MethodParamType: item.methodParamTypes,
+        SetResult: {
+          SetClass: item.setResultClass,
+          SetData: item.setResultData
+        },
+        SetParam: item.setParams.map(p => ({
+          SetClass: p.paramClass,
+          SetData: p.paramData
+        })),
+        IsIntercept: item.isIntercept
+      }))
+    }
+    
+    // 添加 Dex 配置
+    if (dexConfig.value.dexClassName || dexConfig.value.dexMethodName) {
+      hookData.dexData = {
+        DexClassName: dexConfig.value.dexClassName,
+        DexMethodName: dexConfig.value.dexMethodName,
+        DexMethodParamTypes: dexConfig.value.dexMethodParamTypes
       }
-    })
+      
+      // 如果上传了 Dex 文件，添加 dexBytes
+      if (dexFile.value) {
+        const dexBase64 = await fileToBase64(dexFile.value)
+        hookData.dexData.dexBytes = dexBase64
+      }
+    }
+    
+    // 添加 Zip 配置
+    if (zipFile.value) {
+      const zipBase64 = await fileToBase64(zipFile.value)
+      hookData.zipData = {
+        zipBytes: zipBase64,
+        zipVersion: form.value.zipVersion
+      }
+    }
     
     const payload: any = {
       id: hookId.value,
@@ -157,14 +290,7 @@ async function saveHook() {
       version: form.value.version.trim() || '*',
       enabled: form.value.enabled,
       zipVersion: form.value.zipVersion,
-      data: Object.keys(hookData).length > 0 ? JSON.stringify(hookData) : null
-    }
-    
-    if (dexFile.value) {
-      payload.dexData = await fileToBase64(dexFile.value)
-    }
-    if (zipFile.value) {
-      payload.zipData = await fileToBase64(zipFile.value)
+      data: JSON.stringify(hookData)
     }
     
     await http.post('/admin/hook-info', payload)
@@ -199,6 +325,11 @@ onMounted(() => {
     hookId.value = Number(id)
     loadHookInfo()
   }
+  document.addEventListener('click', closeTypeHelper)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeTypeHelper)
 })
 </script>
 
@@ -266,44 +397,147 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Hook 数据配置 -->
+      <!-- Hook 配置列表 -->
       <div class="settings-section">
         <div class="section-header">
           <div>
-            <h2 class="section-title">Hook 数据</h2>
-            <p class="section-desc">以键值对形式配置 Hook 参数</p>
+            <h2 class="section-title">Hook 配置</h2>
+            <p class="section-desc">配置要 Hook 的方法及返回值</p>
           </div>
-          <button @click="addHookParam" class="btn-add-param">
+          <button @click="addHookItem" class="btn-add-param">
             <svg viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
             </svg>
-            添加参数
+            添加 Hook
           </button>
         </div>
         <div class="section-body">
-          <div v-if="hookDataParams.length === 0" class="empty-params">
+          <div v-if="hookItems.length === 0" class="empty-params">
             <svg viewBox="0 0 20 20" fill="currentColor">
               <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z" />
               <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z" />
               <path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z" />
             </svg>
-            <p>暂无 Hook 参数</p>
-            <p class="empty-hint">点击"添加参数"按钮开始配置</p>
+            <p>暂无 Hook 配置</p>
+            <p class="empty-hint">点击"添加 Hook"按钮开始配置方法拦截</p>
           </div>
           
-          <div v-else class="params-list">
-            <transition-group name="param-list">
-              <div v-for="param in hookDataParams" :key="param.id" class="param-item">
-                <input v-model="param.key" type="text" class="param-key" placeholder="键名" />
-                <span class="param-separator">:</span>
-                <input v-model="param.value" type="text" class="param-value" placeholder="值" />
-                <button @click="removeHookParam(param.id)" class="btn-remove-param" title="删除">
+          <div v-else class="hook-items-list">
+            <div v-for="(item, idx) in hookItems" :key="item.id" class="hook-item-card">
+              <div class="hook-item-header">
+                <span class="hook-item-number">#{{ idx + 1 }}</span>
+                <label class="intercept-switch">
+                  <input type="checkbox" v-model="item.isIntercept" />
+                  <span>拦截模式</span>
+                </label>
+                <button @click="removeHookItem(item.id)" class="btn-remove-hook" title="删除此Hook">
                   <svg viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
                   </svg>
                 </button>
               </div>
-            </transition-group>
+              
+              <div class="hook-item-body">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">类名 *</label>
+                    <input v-model="item.className" type="text" class="form-input" placeholder="com.example.MyClass" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">方法名 *</label>
+                    <input v-model="item.methodName" type="text" class="form-input" placeholder="myMethod" />
+                  </div>
+                </div>
+                
+                <div class="form-group">
+                  <div class="label-with-action">
+                    <label class="form-label">方法参数类型</label>
+                    <button @click="addMethodParam(item)" class="btn-add-small">
+                      <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                      </svg>
+                      添加参数
+                    </button>
+                  </div>
+                  <div class="param-types-list">
+                    <div v-if="item.methodParamTypes.length === 0" class="empty-hint-small">
+                      无参数方法
+                    </div>
+                    <div v-else class="type-items">
+                      <div v-for="(paramType, pIdx) in item.methodParamTypes" :key="pIdx" class="type-item">
+                        <span class="type-index">{{ pIdx + 1 }}.</span>
+                        <input v-model="item.methodParamTypes[pIdx]" type="text" class="type-input" placeholder="String / int / com.example.MyClass" />
+                        <div class="type-helper-wrapper">
+                          <button @click.stop="toggleTypeHelper(item.id, 'param', pIdx)" class="btn-type-helper-small" title="选择类型">
+                            <svg viewBox="0 0 20 20" fill="currentColor">
+                              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                            </svg>
+                          </button>
+                          <div v-if="typeHelperOpen?.hookId === item.id && typeHelperOpen?.field === 'param' && typeHelperOpen?.paramIndex === pIdx" class="type-helper-dropdown" @click.stop>
+                            <div class="type-helper-title">Java 基本类型</div>
+                            <div class="type-list">
+                              <button 
+                                v-for="type in javaBasicTypes" 
+                                :key="type.value"
+                                @click="selectType(type.value, item, 'param', pIdx)"
+                                class="type-option"
+                              >
+                                <code>{{ type.label }}</code>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <button @click="removeMethodParam(item, pIdx)" class="btn-remove-small">
+                          <svg viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="form-row" v-if="!item.isIntercept">
+                  <div class="form-group">
+                    <label class="form-label">返回值类型</label>
+                    <div class="input-with-helper">
+                      <input v-model="item.setResultClass" type="text" class="form-input" placeholder="String / int / void" />
+                      <div class="type-helper-wrapper">
+                        <button @click.stop="toggleTypeHelper(item.id, 'result')" class="btn-type-helper-inline" title="选择类型">
+                          <svg viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                          </svg>
+                        </button>
+                        <div v-if="typeHelperOpen?.hookId === item.id && typeHelperOpen?.field === 'result'" class="type-helper-dropdown" @click.stop>
+                          <div class="type-helper-title">Java 基本类型</div>
+                          <div class="type-list">
+                            <button 
+                              v-for="type in javaBasicTypes" 
+                              :key="type.value"
+                              @click="selectType(type.value, item, 'result')"
+                              class="type-option"
+                            >
+                              <code>{{ type.label }}</code>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">返回值数据</label>
+                    <input v-model="item.setResultData" type="text" class="form-input" placeholder="要返回的值" />
+                  </div>
+                </div>
+                
+                <div class="intercept-notice" v-if="item.isIntercept">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                  </svg>
+                  拦截模式：方法将被完全拦截，返回 null
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -974,6 +1208,426 @@ onMounted(() => {
   .uploaded-file {
     background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
     border-color: rgba(16, 185, 129, 0.3);
+  }
+}
+
+/* Hook 配置列表样式 */
+.hook-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hook-item-card {
+  background: white;
+  border: 2px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.hook-item-card:hover {
+  border-color: rgba(79, 70, 229, 0.2);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.08);
+}
+
+.hook-item-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.hook-item-number {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand);
+  background: rgba(79, 70, 229, 0.1);
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.intercept-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-2);
+  flex: 1;
+}
+
+.intercept-switch input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.btn-remove-hook {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  background: transparent;
+  color: #ef4444;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.btn-remove-hook:hover {
+  background: rgba(239, 68, 68, 0.1);
+  transform: scale(1.05);
+}
+
+.btn-remove-hook svg {
+  width: 16px;
+  height: 16px;
+}
+
+.hook-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.label-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.btn-add-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid rgba(79, 70, 229, 0.2);
+  border-radius: 6px;
+  background: rgba(79, 70, 229, 0.05);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-small:hover {
+  background: rgba(79, 70, 229, 0.1);
+  border-color: rgba(79, 70, 229, 0.3);
+}
+
+.btn-add-small svg {
+  width: 14px;
+  height: 14px;
+}
+
+.param-types-list {
+  margin-top: 8px;
+}
+
+.empty-hint-small {
+  font-size: 13px;
+  color: var(--text-2);
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 6px;
+  text-align: center;
+}
+
+.type-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.type-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.type-index {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  min-width: 24px;
+}
+
+.type-input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: 'SF Mono', 'Monaco', monospace;
+}
+
+.type-input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.btn-remove-small {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  background: transparent;
+  color: #ef4444;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.btn-remove-small:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.btn-remove-small svg {
+  width: 14px;
+  height: 14px;
+}
+
+.intercept-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  color: #d97706;
+  font-size: 13px;
+}
+
+.intercept-notice svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* 类型助手样式 */
+.type-helper-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.btn-type-helper {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(79, 70, 229, 0.2);
+  border-radius: 6px;
+  background: rgba(79, 70, 229, 0.05);
+  color: var(--brand);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.btn-type-helper:hover {
+  background: rgba(79, 70, 229, 0.1);
+  border-color: rgba(79, 70, 229, 0.3);
+}
+
+.btn-type-helper svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-type-helper-small {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(79, 70, 229, 0.2);
+  border-radius: 6px;
+  background: rgba(79, 70, 229, 0.05);
+  color: var(--brand);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.btn-type-helper-small:hover {
+  background: rgba(79, 70, 229, 0.1);
+  border-color: rgba(79, 70, 229, 0.3);
+}
+
+.btn-type-helper-small svg {
+  width: 14px;
+  height: 14px;
+}
+
+.btn-type-helper-inline {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(79, 70, 229, 0.2);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--brand);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.btn-type-helper-inline:hover {
+  background: rgba(79, 70, 229, 0.1);
+  border-color: rgba(79, 70, 229, 0.3);
+}
+
+.btn-type-helper-inline svg {
+  width: 14px;
+  height: 14px;
+}
+
+.input-with-helper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-helper .form-input {
+  padding-right: 44px;
+  flex: 1;
+}
+
+.type-helper-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  z-index: 1000;
+  min-width: 150px;
+}
+
+.type-helper-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  margin-bottom: 4px;
+}
+
+.type-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+
+.type-option {
+  padding: 6px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.type-option:hover {
+  background: rgba(79, 70, 229, 0.05);
+  border-color: rgba(79, 70, 229, 0.3);
+}
+
+.type-option code {
+  font-size: 12px;
+  font-family: 'SF Mono', 'Monaco', monospace;
+  color: var(--brand);
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .hook-item-card {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .hook-item-card:hover {
+    border-color: rgba(124, 58, 237, 0.3);
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
+  }
+  
+  .hook-item-header {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+  
+  .hook-item-number {
+    background: rgba(124, 58, 237, 0.15);
+    color: #c084fc;
+  }
+  
+  .empty-hint-small {
+    background: rgba(255, 255, 255, 0.03);
+  }
+  
+  .type-input {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-1-dark);
+  }
+  
+  .intercept-notice {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.4);
+    color: #fbbf24;
+  }
+  
+  .btn-type-helper-inline {
+    background: rgba(22, 22, 26, 0.95);
+  }
+  
+  .type-helper-dropdown {
+    background: rgba(22, 22, 26, 0.98);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  }
+  
+  .type-helper-title {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+  
+  .type-option {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .type-option:hover {
+    background: rgba(124, 58, 237, 0.15);
+    border-color: rgba(124, 58, 237, 0.3);
+  }
+  
+  .type-option code {
+    color: #c084fc;
   }
 }
 </style>
