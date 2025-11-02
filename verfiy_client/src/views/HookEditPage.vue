@@ -30,6 +30,7 @@ type HookItem = {
   setResultData: string
   setParams: Array<{ paramClass: string; paramData: string }>
   isIntercept: boolean
+  useLocalCache: boolean
 }
 
 const hookItems = ref<HookItem[]>([])
@@ -39,7 +40,8 @@ let nextHookId = 1
 const dexConfig = ref({
   dexClassName: '',
   dexMethodName: '',
-  dexMethodParamTypes: [] as string[]
+  dexMethodParamTypes: [] as string[],
+  useLocalCache: false
 })
 
 // 文件上传相关
@@ -108,7 +110,8 @@ async function loadHookInfo() {
               setResultClass: item.SetResult?.SetClass || '',
               setResultData: item.SetResult?.SetData || '',
               setParams: item.SetParam || [],
-              isIntercept: item.IsIntercept || false
+              isIntercept: item.IsIntercept || false,
+              useLocalCache: item.UseLocalCache || false
             }))
           }
           
@@ -117,6 +120,7 @@ async function loadHookInfo() {
             dexConfig.value.dexClassName = parsed.dexData.DexClassName || ''
             dexConfig.value.dexMethodName = parsed.dexData.DexMethodName || ''
             dexConfig.value.dexMethodParamTypes = parsed.dexData.DexMethodParamTypes || []
+            dexConfig.value.useLocalCache = parsed.dexData.UseLocalCache || false
           }
         } catch (e) {
           console.error('解析 Hook 数据失败:', e)
@@ -139,7 +143,8 @@ function addHookItem() {
     setResultClass: '',
     setResultData: '',
     setParams: [],
-    isIntercept: false
+    isIntercept: false,
+    useLocalCache: false
   })
 }
 
@@ -186,11 +191,68 @@ function selectType(type: string, hookItem: HookItem, field: 'result' | 'param',
   typeHelperOpen.value = null
 }
 
+// 验证返回值数据是否符合类型
+function validateReturnValue(type: string, value: string): string | null {
+  if (!type || !value) return null
+  
+  const trimmedValue = value.trim()
+  
+  switch (type.toLowerCase()) {
+    case 'int':
+    case 'long':
+    case 'short':
+    case 'byte':
+      if (!/^-?\d+$/.test(trimmedValue)) {
+        return `${type} 类型应为整数`
+      }
+      break
+    case 'float':
+    case 'double':
+      if (!/^-?\d+\.?\d*$/.test(trimmedValue) && !/^-?\d*\.\d+$/.test(trimmedValue)) {
+        return `${type} 类型应为数字`
+      }
+      break
+    case 'boolean':
+      if (trimmedValue !== 'true' && trimmedValue !== 'false') {
+        return 'boolean 类型应为 true 或 false'
+      }
+      break
+    case 'char':
+      if (trimmedValue.length !== 1) {
+        return 'char 类型应为单个字符'
+      }
+      break
+    case 'void':
+      if (trimmedValue !== '') {
+        return 'void 类型不应有返回值'
+      }
+      break
+  }
+  
+  return null
+}
+
 function closeTypeHelper(event: MouseEvent) {
   const target = event.target as HTMLElement
   if (!target.closest('.type-helper-wrapper')) {
     typeHelperOpen.value = null
   }
+}
+
+function toggleHookCache(item: HookItem) {
+  item.useLocalCache = !item.useLocalCache
+  showToast(
+    item.useLocalCache ? 'Hook 本地缓存已启用' : 'Hook 本地缓存已禁用',
+    item.useLocalCache ? 'success' : 'error'
+  )
+}
+
+function toggleDexCache() {
+  dexConfig.value.useLocalCache = !dexConfig.value.useLocalCache
+  showToast(
+    dexConfig.value.useLocalCache ? 'Dex 本地缓存已启用' : 'Dex 本地缓存已禁用',
+    dexConfig.value.useLocalCache ? 'success' : 'error'
+  )
 }
 
 async function handleDexFileChange(event: Event) {
@@ -255,7 +317,8 @@ async function saveHook() {
           SetClass: p.paramClass,
           SetData: p.paramData
         })),
-        IsIntercept: item.isIntercept
+        IsIntercept: item.isIntercept,
+        UseLocalCache: item.useLocalCache
       }))
     }
     
@@ -264,7 +327,8 @@ async function saveHook() {
       hookData.dexData = {
         DexClassName: dexConfig.value.dexClassName,
         DexMethodName: dexConfig.value.dexMethodName,
-        DexMethodParamTypes: dexConfig.value.dexMethodParamTypes
+        DexMethodParamTypes: dexConfig.value.dexMethodParamTypes,
+        UseLocalCache: dexConfig.value.useLocalCache
       }
       
       // 如果上传了 Dex 文件，添加 dexBytes
@@ -430,6 +494,18 @@ onUnmounted(() => {
                   <input type="checkbox" v-model="item.isIntercept" />
                   <span>拦截模式</span>
                 </label>
+                <button 
+                  @click="toggleHookCache(item)" 
+                  class="btn-cache-toggle" 
+                  :class="{ 'active': item.useLocalCache }"
+                  :title="item.useLocalCache ? '已启用本地缓存' : '点击启用本地缓存'"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z" />
+                    <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z" />
+                    <path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z" />
+                  </svg>
+                </button>
                 <button @click="removeHookItem(item.id)" class="btn-remove-hook" title="删除此Hook">
                   <svg viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
@@ -527,6 +603,12 @@ onUnmounted(() => {
                   <div class="form-group">
                     <label class="form-label">返回值数据</label>
                     <input v-model="item.setResultData" type="text" class="form-input" placeholder="要返回的值" />
+                    <div v-if="validateReturnValue(item.setResultClass, item.setResultData)" class="validation-error">
+                      <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                      </svg>
+                      {{ validateReturnValue(item.setResultClass, item.setResultData) }}
+                    </div>
                   </div>
                 </div>
                 
@@ -545,8 +627,23 @@ onUnmounted(() => {
       <!-- 文件上传 -->
       <div class="settings-section">
         <div class="section-header">
-          <h2 class="section-title">文件资源</h2>
-          <p class="section-desc">上传 Dex 文件和 Zip 资源包</p>
+          <div>
+            <h2 class="section-title">Dex 配置</h2>
+            <p class="section-desc">上传 Dex 文件并配置调用信息</p>
+          </div>
+          <button 
+            @click="toggleDexCache" 
+            class="btn-cache-toggle-large" 
+            :class="{ 'active': dexConfig.useLocalCache }"
+            :title="dexConfig.useLocalCache ? '已启用本地缓存' : '点击启用本地缓存'"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z" />
+              <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z" />
+              <path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z" />
+            </svg>
+            <span>本地缓存</span>
+          </button>
         </div>
         <div class="section-body">
           <div class="form-group">
@@ -583,8 +680,58 @@ onUnmounted(() => {
             </div>
           </div>
           
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Dex 类名</label>
+              <input v-model="dexConfig.dexClassName" type="text" class="form-input" placeholder="com.example.MyHook" />
+              <p class="form-hint">Dex 文件中要调用的类的完整路径</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Dex 方法名</label>
+              <input v-model="dexConfig.dexMethodName" type="text" class="form-input" placeholder="hookMethod" />
+              <p class="form-hint">要调用的静态方法名</p>
+            </div>
+          </div>
+          
           <div class="form-group">
-            <label class="form-label">Zip 资源包</label>
+            <div class="label-with-action">
+              <label class="form-label">Dex 方法参数类型</label>
+              <button @click="dexConfig.dexMethodParamTypes.push('')" class="btn-add-small">
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                </svg>
+                添加参数
+              </button>
+            </div>
+            <div class="param-types-list">
+              <div v-if="dexConfig.dexMethodParamTypes.length === 0" class="empty-hint-small">
+                无参数方法
+              </div>
+              <div v-else class="type-items">
+                <div v-for="(paramType, pIdx) in dexConfig.dexMethodParamTypes" :key="pIdx" class="type-item">
+                  <span class="type-index">{{ pIdx + 1 }}.</span>
+                  <input v-model="dexConfig.dexMethodParamTypes[pIdx]" type="text" class="type-input" placeholder="Context / ClassLoader / ArrayList" />
+                  <button @click="dexConfig.dexMethodParamTypes.splice(pIdx, 1)" class="btn-remove-small">
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Zip 资源包 -->
+      <div class="settings-section">
+        <div class="section-header">
+          <h2 class="section-title">Zip 资源包</h2>
+          <p class="section-desc">上传资源包文件</p>
+        </div>
+        <div class="section-body">
+          <div class="form-group">
+            <label class="form-label">资源文件</label>
             <div class="file-upload-area">
               <input 
                 ref="zipFileInput"
@@ -1265,6 +1412,70 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
+.btn-cache-toggle {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.btn-cache-toggle:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #3b82f6;
+}
+
+.btn-cache-toggle.active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #3b82f6;
+}
+
+.btn-cache-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-cache-toggle-large {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.btn-cache-toggle-large:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #3b82f6;
+}
+
+.btn-cache-toggle-large.active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #3b82f6;
+}
+
+.btn-cache-toggle-large svg {
+  width: 16px;
+  height: 16px;
+}
+
 .btn-remove-hook {
   width: 32px;
   height: 32px;
@@ -1564,6 +1775,34 @@ onUnmounted(() => {
   font-family: 'SF Mono', 'Monaco', monospace;
   color: var(--brand);
   font-weight: 600;
+}
+
+/* 验证错误提示 */
+.validation-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.validation-error svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .validation-error {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
