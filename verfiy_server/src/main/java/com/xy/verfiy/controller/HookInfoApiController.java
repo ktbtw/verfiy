@@ -42,57 +42,29 @@ public class HookInfoApiController {
                                                            @RequestParam("packageName") String packageName,
                                                            @RequestParam(value = "version", required = false) String version,
                                                            @RequestParam(value = "deviceId", required = false) String deviceId) {
-        if (apiKey == null || apiKey.isBlank()) {
-            return unauthorized("缺少 X-API-Key");
-        }
-        Application app = applicationService.findByApiKey(apiKey);
-        if (app == null) {
-            return unauthorized("API Key 无效");
-        }
-        if (ts == null) {
-            return makeResponse(app, null, unauthorized("缺少 X-Timestamp"));
-        }
-        long reqTs;
-        try {
-            reqTs = Long.parseLong(ts);
-        } catch (NumberFormatException e) {
-            return makeResponse(app, null, unauthorized("时间戳格式错误"));
-        }
-        long now = Instant.now().getEpochSecond();
-        if (Math.abs(now - reqTs) > 60) {
-            return makeResponse(app, null, unauthorized("请求已过期"));
-        }
+        return processHookRequest(apiKey, ts, sign, packageName, version, deviceId, false, (app, secret, info) -> {
+            Map<String, Object> body = new HashMap<>();
+            body.put("success", true);
+            body.put("data", info.getData());
+            body.put("dexData", info.getDexData());
+            return makeResponse(app, secret, ResponseEntity.ok(body));
+        });
+    }
 
-        String secret = app.getSecretKey() != null && !app.getSecretKey().isEmpty() ? app.getSecretKey() : apiKey;
-        String expectedSign = CryptoUtils.md5Hex(secret + ts);
-        if (sign == null || !expectedSign.equalsIgnoreCase(sign)) {
-            return makeResponse(app, secret, unauthorized("签名不合法"));
-        }
-
-        HookInfo info = hookInfoService.findEffective(app.getId(), packageName, version);
-        if (info == null) {
-            return makeResponse(app, secret, notFound("未找到 Hook 配置"));
-        }
-        if (info.getEnabled() != null && !info.getEnabled()) {
-            return makeResponse(app, secret, notFound("Hook 已禁用"));
-        }
-
-        if (Boolean.TRUE.equals(info.getRequireCardVerification())) {
-            if (deviceId == null || deviceId.isBlank()) {
-                return makeResponse(app, secret, forbidden("缺少设备标识，无法确认卡密验证"));
-            }
-            if (!cardService.existsVerifiedMachineForApp(app.getId(), deviceId)) {
-                return makeResponse(app, secret, forbidden("该设备未完成卡密验证"));
-            }
-        }
-
-        Map<String, Object> body = new HashMap<>();
-        body.put("success", true);
-        body.put("data", info.getData());
-        body.put("dexData", info.getDexData());
-        body.put("zipData", info.getZipData());
-        body.put("zipVersion", info.getZipVersion());
-        return makeResponse(app, secret, ResponseEntity.ok(body));
+    @GetMapping("/zip")
+    public ResponseEntity<Map<String, Object>> getHookZip(@RequestHeader(value = "X-API-Key", required = false) String apiKey,
+                                                          @RequestHeader(value = "X-Timestamp", required = false) String ts,
+                                                          @RequestHeader(value = "X-Sign", required = false) String sign,
+                                                          @RequestParam("packageName") String packageName,
+                                                          @RequestParam(value = "version", required = false) String version,
+                                                          @RequestParam(value = "deviceId", required = false) String deviceId) {
+        return processHookRequest(apiKey, ts, sign, packageName, version, deviceId, true, (app, secret, info) -> {
+            Map<String, Object> body = new HashMap<>();
+            body.put("success", true);
+            body.put("zipData", info.getZipData());
+            body.put("zipVersion", info.getZipVersion());
+            return makeResponse(app, secret, ResponseEntity.ok(body));
+        });
     }
 
     private ResponseEntity<Map<String, Object>> unauthorized(String msg) {
@@ -149,6 +121,68 @@ public class HookInfoApiController {
             e.printStackTrace();
             return original;
         }
+    }
+
+    private ResponseEntity<Map<String, Object>> processHookRequest(String apiKey,
+                                                                   String ts,
+                                                                   String sign,
+                                                                   String packageName,
+                                                                   String version,
+                                                                   String deviceId,
+                                                                   boolean zipOnly,
+                                                                   HookRequestHandler handler) {
+        if (apiKey == null || apiKey.isBlank()) {
+            return unauthorized("缺少 X-API-Key");
+        }
+        Application app = applicationService.findByApiKey(apiKey);
+        if (app == null) {
+            return unauthorized("API Key 无效");
+        }
+        if (ts == null) {
+            return makeResponse(app, null, unauthorized("缺少 X-Timestamp"));
+        }
+        long reqTs;
+        try {
+            reqTs = Long.parseLong(ts);
+        } catch (NumberFormatException e) {
+            return makeResponse(app, null, unauthorized("时间戳格式错误"));
+        }
+        long now = Instant.now().getEpochSecond();
+        if (Math.abs(now - reqTs) > 60) {
+            return makeResponse(app, null, unauthorized("请求已过期"));
+        }
+
+        String secret = app.getSecretKey() != null && !app.getSecretKey().isEmpty() ? app.getSecretKey() : apiKey;
+        String expectedSign = CryptoUtils.md5Hex(secret + ts);
+        if (sign == null || !expectedSign.equalsIgnoreCase(sign)) {
+            return makeResponse(app, secret, unauthorized("签名不合法"));
+        }
+
+        HookInfo info = zipOnly
+                ? hookInfoService.findZipInfo(app.getId(), packageName, version)
+                : hookInfoService.findEffective(app.getId(), packageName, version);
+        if (info == null) {
+            return makeResponse(app, secret, notFound("未找到 Hook 配置"));
+        }
+        if (info.getEnabled() != null && !info.getEnabled()) {
+            return makeResponse(app, secret, notFound("Hook 已禁用"));
+        }
+
+        if (Boolean.TRUE.equals(info.getRequireCardVerification())) {
+            if (deviceId == null || deviceId.isBlank()) {
+                return makeResponse(app, secret, forbidden("缺少设备标识，无法确认卡密验证"));
+            }
+            if (!cardService.existsVerifiedMachineForApp(app.getId(), deviceId)) {
+                return makeResponse(app, secret, forbidden("该设备未完成卡密验证"));
+            }
+        }
+
+        return handler.handle(app, secret, info);
+    }
+
+    @FunctionalInterface
+    private interface HookRequestHandler {
+        ResponseEntity<Map<String, Object>> handle(Application app, String secret, HookInfo info);
     }
 }
 

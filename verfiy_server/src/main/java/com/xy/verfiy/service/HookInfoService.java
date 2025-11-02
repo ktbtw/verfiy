@@ -17,6 +17,8 @@ public interface HookInfoService {
     boolean delete(Long id, String owner);
 
     HookInfo findEffective(Long appId, String packageName, String version);
+
+    HookInfo findZipInfo(Long appId, String packageName, String version);
 }
 
 

@@ -136,6 +136,11 @@ public class HookInfoServiceImpl implements HookInfoService {
         return hookInfoMapper.findEffective(appId, pkg, ver);
     }
 
+    @Override
+    public HookInfo findZipInfo(Long appId, String packageName, String version) {
+        return findEffective(appId, packageName, version);
+    }
+
     private HookInfo getOwnedHook(Long id, String owner) {
         if (id == null) {
             throw new IllegalArgumentException("id 不能为空");
