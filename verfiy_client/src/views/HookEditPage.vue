@@ -44,6 +44,9 @@ const dexConfig = ref({
   useLocalCache: false
 })
 
+const MAX_DEX_SIZE = 6 * 1024 * 1024
+const MAX_ZIP_SIZE = 10 * 1024 * 1024
+
 // 文件上传相关
 const dexFile = ref<File | null>(null)
 const zipFile = ref<File | null>(null)
@@ -249,14 +252,28 @@ function toggleDexCache() {
 async function handleDexFileChange(event: Event) {
   const target = event.target as HTMLInputElement
   if (target.files && target.files[0]) {
-    dexFile.value = target.files[0]
+    const file = target.files[0]
+    if (file.size > MAX_DEX_SIZE) {
+      showToast('Dex 文件超过 6MB 限制', 'error')
+      target.value = ''
+      dexFile.value = null
+      return
+    }
+    dexFile.value = file
   }
 }
 
 async function handleZipFileChange(event: Event) {
   const target = event.target as HTMLInputElement
   if (target.files && target.files[0]) {
-    zipFile.value = target.files[0]
+    const file = target.files[0]
+    if (file.size > MAX_ZIP_SIZE) {
+      showToast('Zip 文件超过 10MB 限制', 'error')
+      target.value = ''
+      zipFile.value = null
+      return
+    }
+    zipFile.value = file
   }
 }
 
@@ -677,6 +694,7 @@ onUnmounted(() => {
                 </button>
               </div>
             </div>
+            <p class="form-hint">支持 .dex，最大 6MB</p>
           </div>
           
           <div class="form-row">
@@ -761,6 +779,7 @@ onUnmounted(() => {
                 </button>
               </div>
             </div>
+            <p class="form-hint">支持 .zip，最大 10MB</p>
           </div>
           
           <div class="form-group">

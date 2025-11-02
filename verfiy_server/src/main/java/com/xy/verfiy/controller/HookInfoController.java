@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class HookInfoController {
 
     private final HookInfoService hookInfoService;
+    private static final long MAX_DEX_SIZE_BYTES = 6L * 1024 * 1024;  // 6 MB
+    private static final long MAX_ZIP_SIZE_BYTES = 10L * 1024 * 1024; // 10 MB
 
     public HookInfoController(HookInfoService hookInfoService) {
         this.hookInfoService = hookInfoService;
@@ -32,7 +35,7 @@ public class HookInfoController {
         if (targetAppId == null) {
             return List.of();
         }
-        String owner = authentication != null ? authentication.getName() : "admin";
+        String owner = requireOwner(authentication);
         try {
             return hookInfoService.listByApp(targetAppId, owner);
         } catch (IllegalArgumentException ex) {
@@ -43,7 +46,7 @@ public class HookInfoController {
     @GetMapping("/{id}")
     public ResponseEntity<?> get(@PathVariable Long id, Authentication authentication) {
         try {
-            HookInfo info = hookInfoService.getById(id, authentication != null ? authentication.getName() : "admin");
+            HookInfo info = hookInfoService.getById(id, requireOwner(authentication));
             if (info == null) {
                 return ResponseEntity.notFound().build();
             }
@@ -66,7 +69,8 @@ public class HookInfoController {
                 }
                 payload.setAppId(sessionApp);
             }
-            String owner = authentication != null ? authentication.getName() : "admin";
+            validateBinarySize(payload);
+            String owner = requireOwner(authentication);
             HookInfo saved = hookInfoService.saveOrUpdate(payload, owner);
             result.put("success", true);
             result.put("data", saved);
@@ -84,7 +88,7 @@ public class HookInfoController {
                                                             Authentication authentication) {
         Map<String, Object> result = new HashMap<>();
         try {
-            String owner = authentication != null ? authentication.getName() : "admin";
+            String owner = requireOwner(authentication);
             boolean ok = hookInfoService.updateStatus(id, enabled, owner);
             result.put("success", ok);
             if (!ok) {
@@ -104,7 +108,7 @@ public class HookInfoController {
                                                       Authentication authentication) {
         Map<String, Object> result = new HashMap<>();
         try {
-            String owner = authentication != null ? authentication.getName() : "admin";
+            String owner = requireOwner(authentication);
             boolean ok = hookInfoService.delete(id, owner);
             result.put("success", ok);
             if (!ok) {
@@ -116,6 +120,40 @@ public class HookInfoController {
             result.put("success", false);
             result.put("message", ex.getMessage());
             return ResponseEntity.badRequest().body(result);
+        }
+    }
+
+    private String requireOwner(Authentication authentication) {
+        if (authentication == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录");
+        }
+        return authentication.getName();
+    }
+
+    private void validateBinarySize(HookInfo payload) {
+        String dexData = payload.getDexData();
+        if (dexData != null && !dexData.isBlank()) {
+            long size = decodeBase64Size(dexData);
+            if (size > MAX_DEX_SIZE_BYTES) {
+                throw new IllegalArgumentException("Dex 数据超过 6MB 限制");
+            }
+        }
+
+        String zipData = payload.getZipData();
+        if (zipData != null && !zipData.isBlank()) {
+            long size = decodeBase64Size(zipData);
+            if (size > MAX_ZIP_SIZE_BYTES) {
+                throw new IllegalArgumentException("Zip 数据超过 10MB 限制");
+            }
+        }
+    }
+
+    private long decodeBase64Size(String base64) {
+        try {
+            byte[] decoded = Base64.getDecoder().decode(base64.replaceAll("\\s", ""));
+            return decoded.length;
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("二进制数据不是有效的 Base64 编码", e);
         }
     }
 
