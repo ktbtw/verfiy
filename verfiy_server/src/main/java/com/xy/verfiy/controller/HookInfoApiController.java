@@ -88,17 +88,10 @@ public class HookInfoApiController {
 
         Map<String, Object> body = new HashMap<>();
         body.put("success", true);
-        body.put("packageName", info.getPackageName());
-        body.put("version", info.getVersion());
         body.put("data", info.getData());
         body.put("dexData", info.getDexData());
         body.put("zipData", info.getZipData());
         body.put("zipVersion", info.getZipVersion());
-        body.put("updatedAt", info.getUpdatedAt());
-        body.put("requireCardVerification", info.getRequireCardVerification());
-        if (deviceId != null) {
-            body.put("deviceId", deviceId);
-        }
         return makeResponse(app, secret, ResponseEntity.ok(body));
     }
 
