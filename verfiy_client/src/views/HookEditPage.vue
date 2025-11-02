@@ -31,7 +31,6 @@ type HookItem = {
   setResultData: string
   setParams: Array<{ paramClass: string; paramData: string }>
   isIntercept: boolean
-  useLocalCache: boolean
 }
 
 const hookItems = ref<HookItem[]>([])
@@ -112,8 +111,7 @@ async function loadHookInfo() {
               setResultClass: item.SetResult?.SetClass || '',
               setResultData: item.SetResult?.SetData || '',
               setParams: item.SetParam || [],
-              isIntercept: item.IsIntercept || false,
-              useLocalCache: item.UseLocalCache || false
+              isIntercept: item.IsIntercept || false
             }))
           }
           
@@ -145,8 +143,7 @@ function addHookItem() {
     setResultClass: '',
     setResultData: '',
     setParams: [],
-    isIntercept: false,
-    useLocalCache: false
+    isIntercept: false
   })
 }
 
@@ -241,14 +238,6 @@ function closeTypeHelper(event: MouseEvent) {
   }
 }
 
-function toggleHookCache(item: HookItem) {
-  item.useLocalCache = !item.useLocalCache
-  showToast(
-    item.useLocalCache ? 'Hook 本地缓存已启用' : 'Hook 本地缓存已禁用',
-    item.useLocalCache ? 'success' : 'error'
-  )
-}
-
 function toggleDexCache() {
   dexConfig.value.useLocalCache = !dexConfig.value.useLocalCache
   showToast(
@@ -331,8 +320,7 @@ async function saveHook() {
           SetClass: p.paramClass,
           SetData: p.paramData
         })),
-        IsIntercept: item.isIntercept,
-        UseLocalCache: item.useLocalCache
+        IsIntercept: item.isIntercept
       }))
     }
     
@@ -517,18 +505,6 @@ onUnmounted(() => {
                   <input type="checkbox" v-model="item.isIntercept" />
                   <span>拦截模式</span>
                 </label>
-                <button 
-                  @click="toggleHookCache(item)" 
-                  class="btn-cache-toggle" 
-                  :class="{ 'active': item.useLocalCache }"
-                  :title="item.useLocalCache ? '已启用本地缓存' : '点击启用本地缓存'"
-                >
-                  <svg viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z" />
-                    <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z" />
-                    <path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z" />
-                  </svg>
-                </button>
                 <button @click="removeHookItem(item.id)" class="btn-remove-hook" title="删除此Hook">
                   <svg viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
@@ -1433,38 +1409,6 @@ onUnmounted(() => {
   width: 16px;
   height: 16px;
   cursor: pointer;
-}
-
-.btn-cache-toggle {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-2);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  padding: 0;
-}
-
-.btn-cache-toggle:hover {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(59, 130, 246, 0.3);
-  color: #3b82f6;
-}
-
-.btn-cache-toggle.active {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(59, 130, 246, 0.4);
-  color: #3b82f6;
-}
-
-.btn-cache-toggle svg {
-  width: 16px;
-  height: 16px;
 }
 
 .btn-cache-toggle-large {
