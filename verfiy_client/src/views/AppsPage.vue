@@ -60,6 +60,14 @@ const encAlgDropdownOpen = ref(false)
 const currentUser = ref<string | null>(null)
 const isAdmin = ref(false)
 
+// 应用数量配额
+const appQuota = ref({
+  normalCount: 0,
+  xposedCount: 0,
+  normalLimit: 2,
+  xposedLimit: 1
+})
+
 // 邀请码对话框
 const inviteDialog = ref({
   show: false,
@@ -119,6 +127,9 @@ async function fetchApps() {
   try {
     const { data } = await http.get('/admin/apps/api/my-apps')
     apps.value = data || []
+    
+    // 统计各类型应用数量
+    updateAppQuota()
   } catch (e: any) {
     console.error('获取应用列表失败:', e)
     if (e.response?.status === 401) {
@@ -130,6 +141,12 @@ async function fetchApps() {
   } finally {
     loading.value = false
   }
+}
+
+// 统计应用数量配额
+function updateAppQuota() {
+  appQuota.value.normalCount = apps.value.filter(app => app.appType === 'NORMAL').length
+  appQuota.value.xposedCount = apps.value.filter(app => app.appType === 'XPOSED').length
 }
 
 async function selectApp(app: Application) {
@@ -181,10 +198,35 @@ async function createApp() {
 }
 
 function openCreateDialog() {
+  // 检查配额（管理员无限制）
+  if (!isAdmin.value) {
+    const normalAvailable = appQuota.value.normalCount < appQuota.value.normalLimit
+    const xposedAvailable = appQuota.value.xposedCount < appQuota.value.xposedLimit
+    
+    // 如果两种类型都已达到限制，显示提示
+    if (!normalAvailable && !xposedAvailable) {
+      toastMessage.value = '已达到创建应用数量上限（普通应用 2 个，Xposed 应用 1 个）'
+      toastType.value = 'error'
+      showToast.value = true
+      setTimeout(() => {
+        showToast.value = false
+      }, 3000)
+      return
+    }
+    
+    // 设置默认选中可用的应用类型
+    if (normalAvailable) {
+      newAppType.value = 'NORMAL'
+    } else {
+      newAppType.value = 'XPOSED'
+    }
+  } else {
+    newAppType.value = 'NORMAL'
+  }
+  
   showCreateDialog.value = true
   newAppName.value = ''
   newAppDescription.value = ''
-  newAppType.value = 'NORMAL'
 }
 
 function closeCreateDialog() {
@@ -842,8 +884,19 @@ onUnmounted(() => {
               <div class="form-group">
                 <label class="form-label">应用类型 *</label>
                 <div class="app-type-selector">
-                  <label class="type-option" :class="{ 'selected': newAppType === 'NORMAL' }">
-                    <input type="radio" v-model="newAppType" value="NORMAL" />
+                  <label 
+                    class="type-option" 
+                    :class="{ 
+                      'selected': newAppType === 'NORMAL',
+                      'disabled': !isAdmin && appQuota.normalCount >= appQuota.normalLimit
+                    }"
+                  >
+                    <input 
+                      type="radio" 
+                      v-model="newAppType" 
+                      value="NORMAL" 
+                      :disabled="!isAdmin && appQuota.normalCount >= appQuota.normalLimit"
+                    />
                     <div class="type-card">
                       <svg class="type-icon" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
@@ -851,16 +904,33 @@ onUnmounted(() => {
                       </svg>
                       <span class="type-label">普通应用</span>
                       <span class="type-desc">卡密验证系统</span>
+                      <span v-if="!isAdmin" class="type-quota" :class="{ 'quota-full': appQuota.normalCount >= appQuota.normalLimit }">
+                        {{ appQuota.normalCount }}/{{ appQuota.normalLimit }}
+                      </span>
                     </div>
                   </label>
-                  <label class="type-option" :class="{ 'selected': newAppType === 'XPOSED' }">
-                    <input type="radio" v-model="newAppType" value="XPOSED" />
+                  <label 
+                    class="type-option" 
+                    :class="{ 
+                      'selected': newAppType === 'XPOSED',
+                      'disabled': !isAdmin && appQuota.xposedCount >= appQuota.xposedLimit
+                    }"
+                  >
+                    <input 
+                      type="radio" 
+                      v-model="newAppType" 
+                      value="XPOSED" 
+                      :disabled="!isAdmin && appQuota.xposedCount >= appQuota.xposedLimit"
+                    />
                     <div class="type-card">
                       <svg class="type-icon" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd" />
                       </svg>
                       <span class="type-label">Xposed 应用</span>
                       <span class="type-desc">Hook 配置管理</span>
+                      <span v-if="!isAdmin" class="type-quota" :class="{ 'quota-full': appQuota.xposedCount >= appQuota.xposedLimit }">
+                        {{ appQuota.xposedCount }}/{{ appQuota.xposedLimit }}
+                      </span>
                     </div>
                   </label>
                 </div>
@@ -3753,6 +3823,39 @@ onUnmounted(() => {
   color: var(--text-2);
 }
 
+.type-quota {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+  padding: 2px 8px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+  margin-top: 4px;
+}
+
+.type-quota.quota-full {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* 禁用状态 */
+.type-option.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.type-option.disabled .type-card {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.05);
+}
+
+.type-option.disabled:hover .type-card {
+  border-color: rgba(0, 0, 0, 0.05);
+  background: rgba(0, 0, 0, 0.02);
+  transform: none;
+  box-shadow: none;
+}
+
 @media (prefers-color-scheme: dark) {
   .type-card {
     background: rgba(255, 255, 255, 0.05);
@@ -3768,6 +3871,25 @@ onUnmounted(() => {
     background: linear-gradient(135deg, rgba(79, 70, 229, 0.1), rgba(124, 58, 237, 0.1));
     border-color: rgba(124, 58, 237, 0.6);
     box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+  }
+  
+  .type-quota {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  .type-quota.quota-full {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.15);
+  }
+  
+  .type-option.disabled .type-card {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.05);
+  }
+  
+  .type-option.disabled:hover .type-card {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.05);
   }
 }
 

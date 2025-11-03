@@ -115,6 +115,11 @@ public class ApplicationServiceImpl implements ApplicationService {
         List<Application> apps = applicationMapper.listByOwner(owner);
         return apps != null ? apps.size() : 0;
     }
+    
+    @Override
+    public int countByOwnerAndAppType(String owner, String appType) {
+        return applicationMapper.countByOwnerAndAppType(owner, appType);
+    }
 }
 
 

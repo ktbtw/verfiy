@@ -74,6 +74,11 @@
     <delete id="deleteById">
         DELETE FROM application WHERE id = #{id}
     </delete>
+    
+    <select id="countByOwnerAndAppType" resultType="int">
+        SELECT COUNT(*) FROM application 
+        WHERE owner = #{owner} AND app_type = #{appType}
+    </select>
 </mapper>
 
 

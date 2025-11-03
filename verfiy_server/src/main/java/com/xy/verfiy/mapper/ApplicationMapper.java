@@ -14,6 +14,9 @@ public interface ApplicationMapper {
     int update(Application app);
     int deleteById(@Param("id") Long id);
     Application findByApiKey(@Param("apiKey") String apiKey);
+    
+    // 统计指定用户和应用类型的应用数量
+    int countByOwnerAndAppType(@Param("owner") String owner, @Param("appType") String appType);
 }
 
 

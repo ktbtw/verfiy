@@ -33,6 +33,29 @@ public class ApplicationController {
                               Authentication authentication,
                               HttpSession session) {
         String owner = authentication != null ? authentication.getName() : "admin";
+        
+        // 检查是否是管理员
+        boolean isAdmin = authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(auth -> auth.getAuthority().equals("ROLE_ADMIN"));
+        
+        // 对普通用户进行应用数量限制
+        if (!isAdmin) {
+            // 普通应用最多2个
+            if ("NORMAL".equals(appType)) {
+                int normalAppCount = applicationService.countByOwnerAndAppType(owner, "NORMAL");
+                if (normalAppCount >= 2) {
+                    throw new RuntimeException("普通应用最多只能创建2个");
+                }
+            }
+            // Xposed应用最多1个
+            else if ("XPOSED".equals(appType)) {
+                int xposedAppCount = applicationService.countByOwnerAndAppType(owner, "XPOSED");
+                if (xposedAppCount >= 1) {
+                    throw new RuntimeException("Xposed应用最多只能创建1个");
+                }
+            }
+        }
+        
         Application app = applicationService.create(name, description, owner);
         app.setAppType(appType);
         applicationService.update(app);

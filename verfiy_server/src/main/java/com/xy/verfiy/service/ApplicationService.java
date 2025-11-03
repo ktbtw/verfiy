@@ -17,6 +17,9 @@ public interface ApplicationService {
     
     // 统计用户的应用数量
     int countByOwner(String owner);
+    
+    // 统计指定用户和应用类型的应用数量
+    int countByOwnerAndAppType(String owner, String appType);
 }
 
 

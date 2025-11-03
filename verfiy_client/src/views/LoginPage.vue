@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter } from 'vue-router'
 // @ts-ignore
 import UiInput from '../components/ui/Input.vue'
 // @ts-ignore
 import UiButton from '../components/ui/Button.vue'
 
 const router = useRouter()
-const route = useRoute()
 
 const username = ref('')
 const password = ref('')
@@ -45,9 +44,8 @@ async function submit() {
             // 登录成功
             // 显式拉取一次 CSRF Token，确保后续 POST 不会 403
             await fetch('/verfiy/api/csrf-token', { credentials: 'include' }).catch(() => {})
-            // 确认已认证，跳转到目标页面或主页
-            const redirect = (route.query.redirect as string) || '/apps'
-            await router.push(redirect)
+            // 确认已认证，固定跳转到应用页面
+            await router.push('/apps')
           } else {
             error.value = '登录状态验证失败，请重试'
           }
