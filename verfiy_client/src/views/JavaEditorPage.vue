@@ -515,7 +515,7 @@ import android.content.pm.PackageManager;
 import android.content.res.XModuleResources;
 import android.provider.Settings;
 import android.text.TextUtils;
-
+import android.app.Activity;
 import java.lang.ref.WeakReference;
 import java.util.UUID;
 
