@@ -53,6 +53,9 @@ const dexFile = ref<File | null>(null)
 const zipFile = ref<File | null>(null)
 const dexFileInput = ref<HTMLInputElement | null>(null)
 const zipFileInput = ref<HTMLInputElement | null>(null)
+// 服务器已有文件的状态标志
+const hasDexOnServer = ref(false)
+const hasZipOnServer = ref(false)
 
 // Java 基本类型列表
 const javaBasicTypes = [
@@ -130,6 +133,14 @@ async function loadHookInfo() {
         } catch (e) {
           console.error('解析 Hook 数据失败:', e)
         }
+      }
+      
+      // 使用后端返回的文件存在标志
+      if (data.hasDexFile) {
+        hasDexOnServer.value = true
+      }
+      if (data.hasZipFile) {
+        hasZipOnServer.value = true
       }
     }
   } catch (e: any) {
@@ -296,6 +307,7 @@ async function handleDexFileChange(event: Event) {
       return
     }
     dexFile.value = file
+    // 选择新文件后，标记为待上传（会在保存时上传到服务器）
   }
 }
 
@@ -315,6 +327,7 @@ async function handleZipFileChange(event: Event) {
 
 function clearDexFile() {
   dexFile.value = null
+  hasDexOnServer.value = false
   if (dexFileInput.value) {
     dexFileInput.value.value = ''
   }
@@ -322,6 +335,7 @@ function clearDexFile() {
 
 function clearZipFile() {
   zipFile.value = null
+  hasZipOnServer.value = false
   if (zipFileInput.value) {
     zipFileInput.value.value = ''
   }
@@ -762,14 +776,8 @@ onUnmounted(() => {
                 @change="handleDexFileChange"
                 style="display: none"
               />
-              <div v-if="!dexFile" class="upload-placeholder" @click="dexFileInput?.click()">
-                <svg viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-                </svg>
-                <span class="upload-text">点击选择 .dex 文件</span>
-                <span class="upload-hint">或拖拽文件到此处</span>
-              </div>
-              <div v-else class="uploaded-file">
+              <!-- 本地选择了新文件 -->
+              <div v-if="dexFile" class="uploaded-file">
                 <svg viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
                 </svg>
@@ -782,6 +790,34 @@ onUnmounted(() => {
                     <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
                   </svg>
                 </button>
+              </div>
+              <!-- 服务器已有文件 -->
+              <div v-else-if="hasDexOnServer" class="server-file">
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V8z" clip-rule="evenodd" />
+                </svg>
+                <div class="file-info">
+                  <span class="file-name">服务器已有 Dex 文件</span>
+                  <span class="file-size">点击可重新选择文件</span>
+                </div>
+                <button @click="dexFileInput?.click()" class="btn-replace-file" title="重新选择文件">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+                <button @click="clearDexFile" class="btn-clear-file" title="删除文件">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+              <!-- 未上传文件 -->
+              <div v-else class="upload-placeholder" @click="dexFileInput?.click()">
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                </svg>
+                <span class="upload-text">点击选择 .dex 文件</span>
+                <span class="upload-hint">或拖拽文件到此处</span>
               </div>
             </div>
             <p class="form-hint">支持 .dex，最大 6MB</p>
@@ -828,14 +864,8 @@ onUnmounted(() => {
                 @change="handleZipFileChange"
                 style="display: none"
               />
-              <div v-if="!zipFile" class="upload-placeholder" @click="zipFileInput?.click()">
-                <svg viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-                </svg>
-                <span class="upload-text">点击选择 .zip 文件</span>
-                <span class="upload-hint">或拖拽文件到此处</span>
-              </div>
-              <div v-else class="uploaded-file">
+              <!-- 本地选择了新文件 -->
+              <div v-if="zipFile" class="uploaded-file">
                 <svg viewBox="0 0 20 20" fill="currentColor">
                   <path d="M2 6a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V17a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
                 </svg>
@@ -848,6 +878,34 @@ onUnmounted(() => {
                     <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
                   </svg>
                 </button>
+              </div>
+              <!-- 服务器已有文件 -->
+              <div v-else-if="hasZipOnServer" class="server-file">
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M2 6a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V17a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+                </svg>
+                <div class="file-info">
+                  <span class="file-name">服务器已有 Zip 文件 (版本: {{ form.zipVersion }})</span>
+                  <span class="file-size">点击可重新选择文件</span>
+                </div>
+                <button @click="zipFileInput?.click()" class="btn-replace-file" title="重新选择文件">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+                <button @click="clearZipFile" class="btn-clear-file" title="删除文件">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+              <!-- 未上传文件 -->
+              <div v-else class="upload-placeholder" @click="zipFileInput?.click()">
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                </svg>
+                <span class="upload-text">点击选择 .zip 文件</span>
+                <span class="upload-hint">或拖拽文件到此处</span>
               </div>
             </div>
             <p class="form-hint">支持 .zip，最大 10MB</p>
@@ -1288,6 +1346,23 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.server-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(37, 99, 235, 0.05));
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 12px;
+}
+
+.server-file svg {
+  width: 24px;
+  height: 24px;
+  color: #3b82f6;
+  flex-shrink: 0;
+}
+
 .file-info {
   flex: 1;
   display: flex;
@@ -1309,6 +1384,33 @@ onUnmounted(() => {
   font-size: 12px;
   color: var(--text-2);
   font-family: 'SF Mono', 'Monaco', monospace;
+}
+
+.btn-replace-file {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 6px;
+  background: white;
+  color: #3b82f6;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.btn-replace-file:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
+  transform: scale(1.1);
+}
+
+.btn-replace-file svg {
+  width: 14px;
+  height: 14px;
 }
 
 .btn-clear-file {
@@ -1444,6 +1546,19 @@ onUnmounted(() => {
   .uploaded-file {
     background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
     border-color: rgba(16, 185, 129, 0.3);
+  }
+  
+  .server-file {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.1));
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  
+  .btn-replace-file {
+    background: rgba(22, 22, 26, 0.95);
+  }
+  
+  .btn-clear-file {
+    background: rgba(22, 22, 26, 0.95);
   }
 }
 

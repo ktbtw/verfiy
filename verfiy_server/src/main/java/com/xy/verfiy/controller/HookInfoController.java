@@ -50,7 +50,27 @@ public class HookInfoController {
             if (info == null) {
                 return ResponseEntity.notFound().build();
             }
-            return ResponseEntity.ok(info);
+            
+            // 构建返回数据，添加文件存在标志
+            Map<String, Object> response = new HashMap<>();
+            response.put("id", info.getId());
+            response.put("appId", info.getAppId());
+            response.put("packageName", info.getPackageName());
+            response.put("version", info.getVersion());
+            response.put("enabled", info.getEnabled());
+            response.put("data", info.getData());
+            response.put("zipVersion", info.getZipVersion());
+            response.put("requireCardVerification", info.getRequireCardVerification());
+            response.put("createdBy", info.getCreatedBy());
+            response.put("updatedBy", info.getUpdatedBy());
+            response.put("createdAt", info.getCreatedAt());
+            response.put("updatedAt", info.getUpdatedAt());
+            
+            // 添加文件存在标志（不返回实际的文件数据，文件数据太大）
+            response.put("hasDexFile", info.getDexData() != null && !info.getDexData().isBlank());
+            response.put("hasZipFile", info.getZipData() != null && !info.getZipData().isBlank());
+            
+            return ResponseEntity.ok(response);
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", ex.getMessage()));
         }
