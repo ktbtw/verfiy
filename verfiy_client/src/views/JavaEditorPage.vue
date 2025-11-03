@@ -9,6 +9,7 @@ import UiPageHeader from '../components/ui/PageHeader.vue'
 import UiButton from '../components/ui/Button.vue'
 
 const router = useRouter()
+const route = router.currentRoute
 
 // ============= 文件树数据结构 =============
 interface FileNode {
@@ -225,6 +226,7 @@ const compileResult = ref<{
 
 const editorContainer = ref<HTMLElement | null>(null)
 let editor: monaco.editor.IStandaloneCodeEditor | null = null
+let completionProvider: monaco.IDisposable | null = null
 
 // 左侧面板宽度
 const panelWidth = ref(280)
@@ -257,11 +259,55 @@ const renameDialog = ref({
   node: null as FileNode | null
 })
 
+// 删除确认对话框
+const deleteDialog = ref({
+  visible: false,
+  node: null as FileNode | null
+})
+
+// 下载确认对话框
+const downloadConfirmDialog = ref({
+  visible: false,
+  dontShowAgain: false
+})
+
+// 下载提示的 localStorage key
+const DOWNLOAD_CONFIRM_KEY = 'download_confirm_disabled'
+
+// 用户编译配额
+const userQuota = ref({
+  isAdmin: false,
+  remaining: 5,
+  limit: 5,
+  windowHours: 1
+})
+
+// 任务列表对话框
+const taskListDialog = ref({
+  visible: false,
+  loading: false,
+  tasks: [] as any[]
+})
+
 const toast = ref({
   show: false,
   message: '',
   type: 'success' as 'success' | 'error'
 })
+
+// 自动保存相关
+const lastSaveTime = ref<string>('')
+const autoSaveTimer = ref<number | null>(null)
+const AUTOSAVE_INTERVAL = 2000 // 2秒
+const currentUserId = ref<string>('')
+const currentHookId = ref<string>('')
+
+// 动态生成存储 key
+const getStorageKey = () => {
+  const userId = currentUserId.value || 'anonymous'
+  const hookId = currentHookId.value || route.value.query.hookId as string || 'default'
+  return `java-editor-cache-${userId}-${hookId}`
+}
 
 // ============= 工具函数 =============
 function showToast(message: string, type: 'success' | 'error' = 'success') {
@@ -269,6 +315,150 @@ function showToast(message: string, type: 'success' | 'error' = 'success') {
   setTimeout(() => {
     toast.value.show = false
   }, 3000)
+}
+
+// ============= 本地缓存 =============
+// 保存到 localStorage
+function saveToLocalStorage() {
+  try {
+    const storageKey = getStorageKey()
+    console.log('[JavaEditor] 保存缓存使用 key:', storageKey)
+    
+    // 保存当前编辑器内容到 fileContents
+    if (currentFilePath.value && editor) {
+      fileContents.value.set(currentFilePath.value, editor.getValue())
+    }
+    
+    // 准备要保存的数据
+    const dataToSave = {
+      fileTree: toRaw(fileTree.value),
+      fileContents: Array.from(fileContents.value.entries()),
+      currentFilePath: currentFilePath.value,
+      panelWidth: panelWidth.value,
+      compileTaskId: compileTaskId.value, // 保存编译任务ID
+      userId: currentUserId.value,
+      hookId: currentHookId.value,
+      timestamp: new Date().toISOString()
+    }
+    
+    localStorage.setItem(storageKey, JSON.stringify(dataToSave))
+    
+    const now = new Date()
+    lastSaveTime.value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`
+    
+    console.log('[JavaEditor] 已自动保存到本地缓存', lastSaveTime.value)
+  } catch (error) {
+    console.error('[JavaEditor] 保存到 localStorage 失败:', error)
+  }
+}
+
+// 从 localStorage 加载
+function loadFromLocalStorage() {
+  try {
+    const storageKey = getStorageKey()
+    console.log('[JavaEditor] 加载缓存使用 key:', storageKey)
+    
+    const savedData = localStorage.getItem(storageKey)
+    if (!savedData) {
+      console.log('[JavaEditor] 没有找到本地缓存')
+      return false
+    }
+    
+    const data = JSON.parse(savedData)
+    console.log('[JavaEditor] 找到本地缓存，时间:', data.timestamp)
+    
+    // 验证缓存是否属于当前用户和 hook
+    if (data.userId && data.userId !== currentUserId.value) {
+      console.log('[JavaEditor] 缓存用户不匹配，忽略')
+      return false
+    }
+    if (data.hookId && data.hookId !== currentHookId.value) {
+      console.log('[JavaEditor] 缓存 Hook 不匹配，忽略')
+      return false
+    }
+    
+    // 恢复文件树
+    if (data.fileTree) {
+      fileTree.value = data.fileTree
+    }
+    
+    // 恢复文件内容
+    if (data.fileContents) {
+      fileContents.value = new Map(data.fileContents)
+    }
+    
+    // 恢复当前文件路径
+    if (data.currentFilePath) {
+      currentFilePath.value = data.currentFilePath
+    }
+    
+    // 恢复面板宽度
+    if (data.panelWidth) {
+      panelWidth.value = data.panelWidth
+    }
+    
+    // 恢复编译任务ID
+    if (data.compileTaskId) {
+      compileTaskId.value = data.compileTaskId
+      console.log('[JavaEditor] 恢复编译任务ID:', data.compileTaskId)
+      // 异步检查任务状态
+      checkCompileTaskStatus(data.compileTaskId)
+    }
+    
+    const saveDate = new Date(data.timestamp)
+    lastSaveTime.value = `${saveDate.getHours().toString().padStart(2, '0')}:${saveDate.getMinutes().toString().padStart(2, '0')}:${saveDate.getSeconds().toString().padStart(2, '0')}`
+    
+    showToast(`已恢复本地缓存 (${lastSaveTime.value})`, 'success')
+    return true
+  } catch (error) {
+    console.error('[JavaEditor] 从 localStorage 加载失败:', error)
+    return false
+  }
+}
+
+// 清除本地缓存
+function clearLocalStorage() {
+  try {
+    const storageKey = getStorageKey()
+    localStorage.removeItem(storageKey)
+    lastSaveTime.value = ''
+    console.log('[JavaEditor] 已清除本地缓存:', storageKey)
+  } catch (error) {
+    console.error('[JavaEditor] 清除 localStorage 失败:', error)
+  }
+}
+
+// 获取当前用户信息
+async function fetchCurrentUser() {
+  try {
+    const response = await http.get('/api/auth/me')
+    if (response.data && response.data.username) {
+      currentUserId.value = response.data.username
+      console.log('[JavaEditor] 当前用户:', currentUserId.value)
+    }
+  } catch (error) {
+    console.error('[JavaEditor] 获取用户信息失败:', error)
+  }
+}
+
+// 初始化缓存标识
+function initializeCacheIdentifiers() {
+  // 从 query 参数获取 hookId
+  if (route.value.query.hookId) {
+    currentHookId.value = route.value.query.hookId as string
+    console.log('[JavaEditor] 当前 Hook ID:', currentHookId.value)
+  }
+}
+
+// 触发自动保存（防抖）
+function triggerAutoSave() {
+  if (autoSaveTimer.value) {
+    clearTimeout(autoSaveTimer.value)
+  }
+  
+  autoSaveTimer.value = window.setTimeout(() => {
+    saveToLocalStorage()
+  }, AUTOSAVE_INTERVAL)
 }
 
 // ============= 面板调节大小 =============
@@ -428,12 +618,19 @@ function confirmNewItem() {
   console.log('[JavaEditor] confirmNewItem', { type, name, parentPath: parentNode?.path })
   if (!name || !parentNode) return
   
-  // 支持多级路径创建，如 "com.xy.example" 或 "com.xy.example.Test.java"
-  const parts = name.split('.')
-  
   // 检查是否以 .java 结尾，确定最终是创建文件还是文件夹
   const endsWithJava = name.endsWith('.java')
   const isCreatingFile = type === 'file' || endsWithJava
+  
+  // 如果以 .java 结尾，先去掉后缀再分割，避免把 .java 当成路径的一部分
+  const nameWithoutJava = endsWithJava ? name.slice(0, -5) : name
+  const parts = nameWithoutJava.split('.')
+  
+  console.log('[JavaEditor] confirmNewItem -> parsed', { 
+    isCreatingFile, 
+    nameWithoutJava, 
+    parts 
+  })
   
   let currentParent = parentNode
   let currentPath = parentNode.path
@@ -484,7 +681,8 @@ function confirmNewItem() {
       return
     }
     
-    const fileName = lastPart.endsWith('.java') ? lastPart : `${lastPart}.java`
+    // 统一添加 .java 后缀（前面已经去掉了，所以这里必然不会重复）
+    const fileName = `${lastPart}.java`
     const filePath = `${currentPath}/${fileName}`
     
     // 检查文件是否已存在
@@ -592,17 +790,46 @@ function confirmRename() {
   const oldPath = node.path
   const newPath = node.path.substring(0, node.path.lastIndexOf('/') + 1) + newName
   
+  // 提取旧类名和新类名
+  const oldClassName = node.name.replace('.java', '')
+  const newClassName = newName.replace('.java', '')
+  
   node.name = newName
   node.path = newPath
   
   // 更新文件内容缓存
   if (node.type === 'file' && fileContents.value.has(oldPath)) {
-    const content = fileContents.value.get(oldPath)!
+    let content = fileContents.value.get(oldPath)!
+    
+    // 如果是 .java 文件，自动更新类名
+    if (newName.endsWith('.java') && oldClassName !== newClassName) {
+      console.log('[JavaEditor] 自动更新类名', { 
+        oldClassName, 
+        newClassName 
+      })
+      
+      // 替换 public class 旧类名 为 public class 新类名
+      const classRegex = new RegExp(`(public\\s+class\\s+)${oldClassName}(\\s*\\{)`, 'g')
+      const updatedContent = content.replace(classRegex, `$1${newClassName}$2`)
+      
+      // 如果替换成功，显示提示
+      if (updatedContent !== content) {
+        content = updatedContent
+        showToast(`已自动更新类名: ${oldClassName} → ${newClassName}`)
+        console.log('[JavaEditor] 类名已更新')
+      }
+    }
+    
     fileContents.value.delete(oldPath)
     fileContents.value.set(newPath, content)
     
+    // 如果当前正在编辑这个文件，同步更新编辑器
     if (currentFilePath.value === oldPath) {
       currentFilePath.value = newPath
+      if (editor) {
+        editor.setValue(content)
+        console.log('[JavaEditor] 编辑器内容已更新')
+      }
     }
   }
   
@@ -613,9 +840,19 @@ function confirmRename() {
   showToast('重命名成功')
 }
 
-// 删除节点
-function deleteNode(node: FileNode) {
-  if (!confirm(`确定要删除 ${node.name} 吗？`)) return
+// 显示删除确认对话框
+function showDeleteDialog(node: FileNode) {
+  deleteDialog.value = {
+    visible: true,
+    node
+  }
+  hideContextMenu()
+}
+
+// 确认删除
+function confirmDelete() {
+  const node = deleteDialog.value.node
+  if (!node) return
   
   // 找到父节点并删除
   function removeFromParent(tree: FileNode, target: FileNode): boolean {
@@ -646,7 +883,7 @@ function deleteNode(node: FileNode) {
   // 强制触发响应式更新
   refreshFileTree()
   
-  hideContextMenu()
+  deleteDialog.value.visible = false
   showToast('删除成功')
 }
 
@@ -675,7 +912,7 @@ async function handleCompile() {
       filesObj[path] = content
     })
     
-    const response = await http.post('/verfiy/admin/dex-compile/compile', {
+    const response = await http.post('/admin/dex-compile/compile', {
       files: filesObj
     })
     
@@ -687,6 +924,10 @@ async function handleCompile() {
         taskId: response.data.taskId
       }
       showToast('编译成功！')
+      // 立即保存编译任务ID到缓存
+      saveToLocalStorage()
+      // 刷新配额
+      fetchUserQuota()
     } else {
       compileResult.value = {
         success: false,
@@ -696,25 +937,62 @@ async function handleCompile() {
     }
   } catch (error: any) {
     console.error('编译出错:', error)
-    compileResult.value = {
-      success: false,
-      message: error.response?.data?.compileLog || error.response?.data?.message || error.message || '编译请求失败'
+    
+    // 检查是否是频率限制错误
+    if (error.response?.status === 429) {
+      const errorData = error.response?.data
+      compileResult.value = {
+        success: false,
+        message: errorData?.message || '访问频率超限！请稍后再试'
+      }
+      showToast(`访问频率超限！普通用户每小时最多编译 ${userQuota.value.limit} 次`, 'error')
+      // 刷新配额显示
+      fetchUserQuota()
+    } else {
+      compileResult.value = {
+        success: false,
+        message: error.response?.data?.compileLog || error.response?.data?.message || error.message || '编译请求失败'
+      }
+      showToast('编译请求失败', 'error')
     }
-    showToast('编译请求失败', 'error')
   } finally {
     compiling.value = false
   }
 }
 
-async function handleDownload() {
+function handleDownload() {
   if (!compileTaskId.value) {
     showToast('没有可下载的文件', 'error')
     return
   }
   
+  // 检查用户是否选择了不再提示
+  const dontShow = localStorage.getItem(DOWNLOAD_CONFIRM_KEY) === 'true'
+  if (dontShow) {
+    // 直接下载
+    confirmDownload()
+  } else {
+    // 显示下载确认对话框
+    downloadConfirmDialog.value.dontShowAgain = false
+    downloadConfirmDialog.value.visible = true
+  }
+}
+
+async function confirmDownload() {
+  if (!compileTaskId.value) {
+    return
+  }
+  
+  // 保存用户的"不再提示"选择
+  if (downloadConfirmDialog.value.dontShowAgain) {
+    localStorage.setItem(DOWNLOAD_CONFIRM_KEY, 'true')
+  }
+  
+  downloadConfirmDialog.value.visible = false
+  
   try {
     downloadDisabled.value = true
-    const response = await http.get(`/verfiy/admin/dex-compile/download/${compileTaskId.value}`, {
+    const response = await http.get(`/admin/dex-compile/download/${compileTaskId.value}`, {
       responseType: 'blob'
     })
     
@@ -722,7 +1000,7 @@ async function handleDownload() {
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `hook-${compileTaskId.value}.dex`
+    link.download = 'hook.dex'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -731,6 +1009,8 @@ async function handleDownload() {
     showToast('下载成功！此 Dex 文件已从服务器清除')
     compileTaskId.value = null
     compileResult.value = null
+    // 立即保存状态到缓存（清除 taskId）
+    saveToLocalStorage()
   } catch (error: any) {
     console.error('下载出错:', error)
     if (error.response?.status === 404) {
@@ -744,17 +1024,199 @@ async function handleDownload() {
   }
 }
 
+// 检查编译任务状态
+async function checkCompileTaskStatus(taskId: string) {
+  try {
+    console.log('[JavaEditor] 检查编译任务状态:', taskId)
+    const response = await http.get(`/admin/dex-compile/task/${taskId}`)
+    
+    if (response.data && response.data.success) {
+      const task = response.data
+      
+      if (task.downloaded) {
+        // 任务已被下载，清除 taskId
+        console.log('[JavaEditor] 任务已被下载，清除 taskId')
+        compileTaskId.value = null
+        compileResult.value = null
+      } else if (task.compileSuccess) {
+        // 任务编译成功且未下载，恢复编译结果
+        console.log('[JavaEditor] 发现未下载的编译任务')
+        compileResult.value = {
+          success: true,
+          message: '编译成功！（已恢复）',
+          taskId: taskId
+        }
+        showToast('发现未下载的编译任务，可以继续下载', 'success')
+      } else {
+        // 任务编译失败
+        console.log('[JavaEditor] 任务编译失败')
+        compileResult.value = {
+          success: false,
+          message: task.log || '编译失败'
+        }
+        compileTaskId.value = null
+      }
+    } else {
+      // 任务不存在，清除 taskId
+      console.log('[JavaEditor] 任务不存在，清除 taskId')
+      compileTaskId.value = null
+      compileResult.value = null
+    }
+  } catch (error: any) {
+    console.error('[JavaEditor] 检查任务状态失败:', error)
+    // 如果是 404，说明任务已被删除
+    if (error.response?.status === 404) {
+      compileTaskId.value = null
+      compileResult.value = null
+    }
+  }
+}
+
+// 查询服务器上未下载的编译任务
+async function checkUndownloadedTasks() {
+  try {
+    console.log('[JavaEditor] 查询未下载的编译任务')
+    const response = await http.get('/admin/dex-compile/undownloaded')
+    
+    if (response.data && response.data.success) {
+      const tasks = response.data.tasks
+      console.log('[JavaEditor] 找到未下载任务:', tasks.length, '个')
+      
+      if (tasks.length > 0) {
+        // 取最新的一个任务
+        const latestTask = tasks[0]
+        compileTaskId.value = latestTask.taskId
+        compileResult.value = {
+          success: true,
+          message: `编译成功！（${new Date(latestTask.createTime).toLocaleString()}）`,
+          taskId: latestTask.taskId
+        }
+        
+        // 如果有多个未下载任务，给出提示
+        if (tasks.length > 1) {
+          showToast(`发现 ${tasks.length} 个未下载的编译任务，显示最新的一个`, 'success')
+        } else {
+          showToast('发现1个未下载的编译任务，可以继续下载', 'success')
+        }
+        
+        // 立即保存到缓存
+        saveToLocalStorage()
+      }
+    }
+  } catch (error: any) {
+    console.error('[JavaEditor] 查询未下载任务失败:', error)
+    // 静默失败，不影响用户体验
+  }
+}
+
+// 查询用户编译配额
+async function fetchUserQuota() {
+  try {
+    const response = await http.get('/admin/dex-compile/quota')
+    
+    if (response.data && response.data.success) {
+      userQuota.value = {
+        isAdmin: response.data.isAdmin,
+        remaining: response.data.remaining,
+        limit: response.data.limit,
+        windowHours: response.data.windowHours
+      }
+      console.log('[JavaEditor] 用户配额:', userQuota.value)
+    }
+  } catch (error: any) {
+    console.error('[JavaEditor] 查询配额失败:', error)
+  }
+}
+
+// 显示任务列表
+async function showTaskList() {
+  taskListDialog.value.visible = true
+  taskListDialog.value.loading = true
+  
+  try {
+    const response = await http.get('/admin/dex-compile/tasks')
+    
+    if (response.data && response.data.success) {
+      taskListDialog.value.tasks = response.data.tasks
+      console.log('[JavaEditor] 任务列表:', response.data.tasks)
+    } else {
+      showToast('加载任务列表失败', 'error')
+    }
+  } catch (error: any) {
+    console.error('[JavaEditor] 查询任务列表失败:', error)
+    showToast('加载任务列表失败', 'error')
+  } finally {
+    taskListDialog.value.loading = false
+  }
+}
+
+// 从任务列表中加载任务
+function loadTaskFromList(task: any) {
+  if (task.success && !task.downloaded) {
+    compileTaskId.value = task.taskId
+    compileResult.value = {
+      success: true,
+      message: `编译成功！（${new Date(task.createTime).toLocaleString()}）`,
+      taskId: task.taskId
+    }
+    taskListDialog.value.visible = false
+    showToast('已加载该编译任务', 'success')
+    saveToLocalStorage()
+  } else if (task.downloaded) {
+    showToast('该任务已被下载', 'error')
+  } else {
+    showToast('该任务编译失败', 'error')
+  }
+}
+
+// 格式化任务状态
+function getTaskStatusText(task: any) {
+  if (task.downloaded) {
+    return '已下载'
+  } else if (task.success) {
+    return '可下载'
+  } else {
+    return '编译失败'
+  }
+}
+
+// 获取任务状态样式
+function getTaskStatusClass(task: any) {
+  if (task.downloaded) {
+    return 'status-downloaded'
+  } else if (task.success) {
+    return 'status-available'
+  } else {
+    return 'status-failed'
+  }
+}
+
 function goBack() {
   router.back()
 }
 
 // ============= Monaco Editor 初始化 =============
-onMounted(() => {
-  // 加载初始文件
-  const initialFile = findNode(fileTree.value, currentFilePath.value)
-  if (initialFile && initialFile.type === 'file') {
-    fileContents.value.set(initialFile.path, initialFile.content || '')
+onMounted(async () => {
+  // 初始化缓存标识（用户ID和Hook ID）
+  initializeCacheIdentifiers()
+  await fetchCurrentUser()
+  
+  // 尝试从本地缓存加载
+  const loadedFromCache = loadFromLocalStorage()
+  
+  // 如果没有缓存，加载初始文件
+  if (!loadedFromCache) {
+    const initialFile = findNode(fileTree.value, currentFilePath.value)
+    if (initialFile && initialFile.type === 'file') {
+      fileContents.value.set(initialFile.path, initialFile.content || '')
+    }
   }
+  
+  // 查询服务器上未下载的编译任务（即使本地有缓存也要查询，以防用户在其他设备编译）
+  checkUndownloadedTasks()
+  
+  // 查询用户编译配额
+  fetchUserQuota()
   
   // 初始化 Monaco Editor
   if (editorContainer.value) {
@@ -782,7 +1244,12 @@ onMounted(() => {
     })
 
     // 添加 Android 和 Xposed 的代码补全提示
-    monaco.languages.registerCompletionItemProvider('java', {
+    // 先清理之前的补全提供器（如果存在）
+    if (completionProvider) {
+      completionProvider.dispose()
+    }
+    
+    completionProvider = monaco.languages.registerCompletionItemProvider('java', {
       provideCompletionItems: () => {
         const suggestions = [
           // === Xposed 核心类 ===
@@ -1142,6 +1609,11 @@ onMounted(() => {
         return { suggestions }
       }
     })
+    
+    // 监听编辑器内容变化，触发自动保存
+    editor.onDidChangeModelContent(() => {
+      triggerAutoSave()
+    })
   }
   
   // 点击其他地方关闭右键菜单
@@ -1153,9 +1625,24 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  // 保存一次再卸载
+  saveToLocalStorage()
+  
+  // 清理定时器
+  if (autoSaveTimer.value) {
+    clearTimeout(autoSaveTimer.value)
+  }
+  
   if (editor) {
     editor.dispose()
   }
+  
+  // 清理代码补全提供器
+  if (completionProvider) {
+    completionProvider.dispose()
+    completionProvider = null
+  }
+  
   document.removeEventListener('click', hideContextMenu)
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', stopResize)
@@ -1173,6 +1660,17 @@ onBeforeUnmount(() => {
         返回
       </button>
       <h1 class="title">Java Hook 编辑器</h1>
+      <div class="auto-save-status" v-if="lastSaveTime">
+        <svg viewBox="0 0 20 20" fill="currentColor" class="save-icon">
+          <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h5a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z" />
+        </svg>
+        <span>已保存 {{ lastSaveTime }}</span>
+        <button @click="clearLocalStorage(); showToast('已清除缓存')" class="btn-clear-cache" title="清除当前缓存">
+          <svg viewBox="0 0 20 20" fill="currentColor" style="width: 0.875rem; height: 0.875rem;">
+            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+          </svg>
+        </button>
+      </div>
       <div class="actions">
         <button @click="handleCompile" :disabled="compiling" class="btn-compile">
           {{ compiling ? '编译中...' : '编译' }}
@@ -1185,6 +1683,12 @@ onBeforeUnmount(() => {
         >
           下载 Dex
         </button>
+        <button @click="showTaskList" class="btn-tasks">
+          任务
+        </button>
+        <span class="quota-info" :title="userQuota.isAdmin ? '管理员无编译次数限制' : `每${userQuota.windowHours}小时最多编译${userQuota.limit}次`">
+          剩余: {{ userQuota.isAdmin ? '∞' : userQuota.remaining }}/{{ userQuota.isAdmin ? '∞' : userQuota.limit }}
+        </span>
       </div>
     </div>
 
@@ -1258,7 +1762,7 @@ onBeforeUnmount(() => {
       <div class="menu-item" @click="showRenameDialog(contextMenu.node)">
         重命名
       </div>
-      <div v-if="contextMenu.node.path !== 'src'" class="menu-item danger" @click="deleteNode(contextMenu.node)">
+      <div v-if="contextMenu.node.path !== 'src'" class="menu-item danger" @click="showDeleteDialog(contextMenu.node)">
         删除
       </div>
     </div>
@@ -1305,6 +1809,103 @@ onBeforeUnmount(() => {
         <div class="dialog-footer">
           <button @click="renameDialog.visible = false" class="btn-cancel">取消</button>
           <button @click="confirmRename" class="btn-confirm">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除确认对话框 -->
+    <div v-if="deleteDialog.visible" class="dialog-overlay" @click="deleteDialog.visible = false">
+      <div class="dialog dialog-confirm" @click.stop>
+        <div class="dialog-header">
+          <h3>确认删除</h3>
+          <button @click="deleteDialog.visible = false" class="btn-close">×</button>
+        </div>
+        <div class="dialog-body">
+          <div class="confirm-message">
+            <svg viewBox="0 0 20 20" fill="currentColor" class="warning-icon">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            <div>
+              <p class="confirm-title">确定要删除 <strong>{{ deleteDialog.node?.name }}</strong> 吗？</p>
+              <p class="confirm-subtitle" v-if="deleteDialog.node?.type === 'folder'">此操作将删除文件夹及其所有内容</p>
+              <p class="confirm-subtitle" v-else>此操作不可撤销</p>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button @click="deleteDialog.visible = false" class="btn-cancel">取消</button>
+          <button @click="confirmDelete" class="btn-danger">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 下载确认对话框 -->
+    <div v-if="downloadConfirmDialog.visible" class="dialog-overlay" @click="downloadConfirmDialog.visible = false">
+      <div class="dialog dialog-confirm" @click.stop>
+        <div class="dialog-header">
+          <h3>确认下载</h3>
+          <button @click="downloadConfirmDialog.visible = false" class="btn-close">×</button>
+        </div>
+        <div class="dialog-body">
+          <div class="confirm-message">
+            <svg viewBox="0 0 20 20" fill="currentColor" class="warning-icon">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            <div>
+              <p class="confirm-title"><strong>注意：每个编译任务只能下载一次！</strong></p>
+              <p class="confirm-subtitle">下载后服务器将立即清除此文件</p>
+              <p class="confirm-subtitle">无法再次下载，请妥善保存</p>
+              <p class="confirm-subtitle" style="margin-top: 0.75rem; color: #111827;">文件名：<strong>hook.dex</strong></p>
+            </div>
+          </div>
+          <div class="checkbox-container">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="downloadConfirmDialog.dontShowAgain" />
+              <span>不再提示</span>
+            </label>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button @click="downloadConfirmDialog.visible = false" class="btn-cancel">取消</button>
+          <button @click="confirmDownload" class="btn-confirm">确认下载</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 任务列表对话框 -->
+    <div v-if="taskListDialog.visible" class="dialog-overlay" @click="taskListDialog.visible = false">
+      <div class="dialog dialog-tasks" @click.stop>
+        <div class="dialog-header">
+          <h3>编译任务列表</h3>
+          <button @click="taskListDialog.visible = false" class="btn-close">×</button>
+        </div>
+        <div class="dialog-body">
+          <div v-if="taskListDialog.loading" class="task-loading">
+            加载中...
+          </div>
+          <div v-else-if="taskListDialog.tasks.length === 0" class="task-empty">
+            暂无编译任务
+          </div>
+          <div v-else class="task-list">
+            <div 
+              v-for="task in taskListDialog.tasks" 
+              :key="task.taskId" 
+              class="task-item"
+              :class="{ 'task-item-clickable': task.success && !task.downloaded }"
+              @click="loadTaskFromList(task)"
+            >
+              <div class="task-info">
+                <div class="task-time">{{ new Date(task.createTime).toLocaleString() }}</div>
+                <div class="task-id">ID: {{ task.taskId.substring(0, 8) }}...</div>
+              </div>
+              <div class="task-status" :class="getTaskStatusClass(task)">
+                {{ getTaskStatusText(task) }}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button @click="taskListDialog.visible = false" class="btn-cancel">关闭</button>
         </div>
       </div>
     </div>
@@ -1367,11 +1968,48 @@ onBeforeUnmount(() => {
 }
 
 .title {
-  flex: 1;
   font-size: 1.25rem;
   font-weight: 600;
   color: #111827;
   margin: 0;
+}
+
+.auto-save-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: #16a34a;
+  margin-left: 1rem;
+  flex: 1;
+}
+
+.auto-save-status .save-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.btn-clear-cache {
+  margin-left: auto;
+  padding: 0.25rem;
+  border: none;
+  background: transparent;
+  color: #16a34a;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.btn-clear-cache:hover {
+  background: rgba(22, 163, 74, 0.1);
+  color: #15803d;
 }
 
 .actions {
@@ -1379,7 +2017,7 @@ onBeforeUnmount(() => {
   gap: 0.5rem;
 }
 
-.btn-compile, .btn-download {
+.btn-compile, .btn-download, .btn-tasks {
   padding: 0.5rem 1.5rem;
   border: none;
   border-radius: 6px;
@@ -1415,6 +2053,27 @@ onBeforeUnmount(() => {
 .btn-download:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.btn-tasks {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-tasks:hover {
+  background: #2563eb;
+}
+
+.quota-info {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: #f3f4f6;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+  cursor: help;
 }
 
 .main-content {
@@ -1760,6 +2419,166 @@ onBeforeUnmount(() => {
 
 .btn-confirm:hover {
   background: #2563eb;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+.dialog-confirm .confirm-message {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.dialog-confirm .warning-icon {
+  width: 3rem;
+  height: 3rem;
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.dialog-confirm .confirm-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  color: #111827;
+  font-weight: 500;
+}
+
+.dialog-confirm .confirm-title strong {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.dialog-confirm .confirm-subtitle {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.checkbox-container {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #374151;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.checkbox-label:hover {
+  color: #111827;
+}
+
+/* 任务列表对话框 */
+.dialog-tasks {
+  width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-tasks .dialog-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 300px;
+  max-height: 500px;
+}
+
+.task-loading, .task-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.task-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.task-item-clickable {
+  cursor: pointer;
+}
+
+.task-item-clickable:hover {
+  background: #f3f4f6;
+  border-color: #3b82f6;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.task-info {
+  flex: 1;
+}
+
+.task-time {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #111827;
+  margin-bottom: 0.25rem;
+}
+
+.task-id {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-family: monospace;
+}
+
+.task-status {
+  padding: 0.375rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  min-width: 70px;
+}
+
+.status-available {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-downloaded {
+  background: #e5e7eb;
+  color: #6b7280;
+}
+
+.status-failed {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .toast {

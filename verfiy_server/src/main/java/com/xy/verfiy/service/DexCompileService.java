@@ -37,10 +37,11 @@ public class DexCompileService {
     /**
      * 编译多个 Java 文件为 Dex
      */
-    public DexCompileTask compileMultipleFilesToDex(Map<String, String> files) {
+    public DexCompileTask compileMultipleFilesToDex(Map<String, String> files, Long userId) {
         String taskId = UUID.randomUUID().toString();
         DexCompileTask task = new DexCompileTask();
         task.setTaskId(taskId);
+        task.setUserId(userId);
         task.setJavaCode(files.size() + " 个文件");
         task.setSuccess(false);
         task.setDownloaded(false);
@@ -135,7 +136,7 @@ public class DexCompileService {
     /**
      * 编译单个 Java 文件为 Dex（向后兼容）
      */
-    public DexCompileTask compileJavaToDex(String javaCode) {
+    public DexCompileTask compileJavaToDex(String javaCode, Long userId) {
         // 转换为多文件格式
         String packageName = extractPackageName(javaCode);
         String className = extractClassName(javaCode);
@@ -144,7 +145,7 @@ public class DexCompileService {
         Map<String, String> files = new HashMap<>();
         files.put(filePath, javaCode);
         
-        return compileMultipleFilesToDex(files);
+        return compileMultipleFilesToDex(files, userId);
     }
 
     /**
@@ -537,6 +538,20 @@ public class DexCompileService {
         PrintWriter pw = new PrintWriter(sw);
         t.printStackTrace(pw);
         return sw.toString();
+    }
+    
+    /**
+     * 查询某个用户未下载的编译成功任务
+     */
+    public List<DexCompileTask> getUndownloadedTasks(Long userId) {
+        return dexCompileTaskMapper.findUndownloadedByUserId(userId);
+    }
+    
+    /**
+     * 查询某个用户的所有编译任务
+     */
+    public List<DexCompileTask> getAllTasks(Long userId) {
+        return dexCompileTaskMapper.findAllByUserId(userId);
     }
 }
 

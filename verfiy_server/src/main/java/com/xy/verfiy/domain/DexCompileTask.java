@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 public class DexCompileTask {
     private Long id;
     private String taskId;
+    private Long userId;
     private String javaCode;
     private String dexFilePath;
     private String compileLog;

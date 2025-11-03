@@ -1,7 +1,10 @@
 package com.xy.verfiy.controller;
 
 import com.xy.verfiy.domain.DexCompileTask;
+import com.xy.verfiy.domain.UserAccount;
+import com.xy.verfiy.mapper.UserAccountMapper;
 import com.xy.verfiy.service.DexCompileService;
+import com.xy.verfiy.service.CompileQuotaService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
@@ -11,9 +14,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -23,16 +28,43 @@ public class DexCompileController {
 
     @Autowired
     private DexCompileService dexCompileService;
+    
+    @Autowired
+    private UserAccountMapper userAccountMapper;
+    
+    @Autowired
+    private CompileQuotaService compileQuotaService;
 
     /**
      * 编译 Java 代码为 Dex（支持多文件）
      */
     @PostMapping("/compile")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Map<String, Object>> compile(@RequestBody Map<String, Object> request) {
+    @PreAuthorize("isAuthenticated()")  // 修改为：只需要登录即可
+    public ResponseEntity<Map<String, Object>> compile(@RequestBody Map<String, Object> request, Authentication authentication) {
         Map<String, Object> response = new HashMap<>();
         
         try {
+            // 获取当前用户
+            Long userId = getCurrentUserId(authentication);
+            if (userId == null) {
+                response.put("success", false);
+                response.put("message", "无法获取当前用户信息");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+            }
+            
+            // 检查是否是管理员
+            boolean isAdmin = authentication.getAuthorities().stream()
+                    .anyMatch(auth -> auth.getAuthority().equals("ROLE_ADMIN"));
+            
+            // 检查编译配额限制
+            if (!compileQuotaService.checkCompileAccess(userId, isAdmin)) {
+                int remaining = compileQuotaService.getRemainingCompiles(userId, isAdmin);
+                response.put("success", false);
+                response.put("message", "编译次数超限！普通用户每小时最多编译 5 次，请稍后再试");
+                response.put("remainingAccess", remaining);
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(response);
+            }
+            
             // 支持新旧两种格式：单文件（javaCode）和多文件（files）
             Map<String, String> files = new HashMap<>();
             
@@ -67,7 +99,7 @@ public class DexCompileController {
                 return ResponseEntity.badRequest().body(response);
             }
             
-            DexCompileTask task = dexCompileService.compileMultipleFilesToDex(files);
+            DexCompileTask task = dexCompileService.compileMultipleFilesToDex(files, userId);
             
             response.put("success", task.getSuccess());
             response.put("taskId", task.getTaskId());
@@ -127,7 +159,7 @@ public class DexCompileController {
      * 下载 Dex 文件
      */
     @GetMapping("/download/{taskId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("isAuthenticated()")  // 修改为：只需要登录即可
     public ResponseEntity<?> download(@PathVariable String taskId) {
         try {
             log.info("下载 Dex 文件，任务ID: {}", taskId);
@@ -165,7 +197,7 @@ public class DexCompileController {
      * 查询编译任务状态
      */
     @GetMapping("/task/{taskId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("isAuthenticated()")  // 修改为：只需要登录即可
     public ResponseEntity<Map<String, Object>> getTaskStatus(@PathVariable String taskId) {
         Map<String, Object> response = new HashMap<>();
         
@@ -192,6 +224,123 @@ public class DexCompileController {
             response.put("message", "查询失败: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
+    }
+    
+    /**
+     * 查询当前用户未下载的编译任务
+     */
+    @GetMapping("/undownloaded")
+    @PreAuthorize("isAuthenticated()")  // 修改为：只需要登录即可
+    public ResponseEntity<Map<String, Object>> getUndownloadedTasks(Authentication authentication) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            // 获取当前用户
+            Long userId = getCurrentUserId(authentication);
+            if (userId == null) {
+                response.put("success", false);
+                response.put("message", "无法获取当前用户信息");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+            }
+            
+            List<DexCompileTask> tasks = dexCompileService.getUndownloadedTasks(userId);
+            
+            response.put("success", true);
+            response.put("tasks", tasks);
+            response.put("count", tasks.size());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("查询未下载任务异常", e);
+            response.put("success", false);
+            response.put("message", "查询失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    /**
+     * 查询当前用户的所有编译任务
+     */
+    @GetMapping("/tasks")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, Object>> getAllTasks(Authentication authentication) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            // 获取当前用户
+            Long userId = getCurrentUserId(authentication);
+            if (userId == null) {
+                response.put("success", false);
+                response.put("message", "无法获取当前用户信息");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+            }
+            
+            List<DexCompileTask> tasks = dexCompileService.getAllTasks(userId);
+            
+            response.put("success", true);
+            response.put("tasks", tasks);
+            response.put("count", tasks.size());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("查询任务列表异常", e);
+            response.put("success", false);
+            response.put("message", "查询失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    /**
+     * 查询当前用户的编译次数配额
+     */
+    @GetMapping("/quota")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, Object>> getQuota(Authentication authentication) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            Long userId = getCurrentUserId(authentication);
+            if (userId == null) {
+                response.put("success", false);
+                response.put("message", "无法获取当前用户信息");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+            }
+            
+            boolean isAdmin = authentication.getAuthorities().stream()
+                    .anyMatch(auth -> auth.getAuthority().equals("ROLE_ADMIN"));
+            
+            int remaining = compileQuotaService.getRemainingCompiles(userId, isAdmin);
+            
+            response.put("success", true);
+            response.put("isAdmin", isAdmin);
+            response.put("remaining", remaining);
+            response.put("limit", isAdmin ? -1 : 5);  // -1 表示无限制
+            response.put("windowHours", 1);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("查询配额异常", e);
+            response.put("success", false);
+            response.put("message", "查询失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    /**
+     * 获取当前登录用户ID
+     */
+    private Long getCurrentUserId(Authentication authentication) {
+        if (authentication == null) {
+            return null;
+        }
+        
+        String username = authentication.getName();
+        UserAccount user = userAccountMapper.findByUsername(username);
+        
+        return user != null ? user.getId() : null;
     }
 }
 

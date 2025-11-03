@@ -5,6 +5,7 @@
     <resultMap id="DexCompileTaskResult" type="com.xy.verfiy.domain.DexCompileTask">
         <id property="id" column="id" />
         <result property="taskId" column="task_id" />
+        <result property="userId" column="user_id" />
         <result property="javaCode" column="java_code" />
         <result property="dexFilePath" column="dex_file_path" />
         <result property="compileLog" column="compile_log" />
@@ -17,6 +18,7 @@
     <insert id="insert" parameterType="com.xy.verfiy.domain.DexCompileTask" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO dex_compile_task (
             task_id,
+            user_id,
             java_code,
             dex_file_path,
             compile_log,
@@ -26,6 +28,7 @@
             update_time
         ) VALUES (
             #{taskId},
+            #{userId},
             #{javaCode},
             #{dexFilePath},
             #{compileLog},
@@ -54,6 +57,24 @@
         DELETE FROM dex_compile_task
         WHERE task_id = #{taskId}
     </delete>
+
+    <select id="findUndownloadedByUserId" resultMap="DexCompileTaskResult">
+        SELECT *
+        FROM dex_compile_task
+        WHERE user_id = #{userId}
+          AND success = TRUE
+          AND downloaded = FALSE
+        ORDER BY create_time DESC
+        LIMIT 10
+    </select>
+
+    <select id="findAllByUserId" resultMap="DexCompileTaskResult">
+        SELECT *
+        FROM dex_compile_task
+        WHERE user_id = #{userId}
+        ORDER BY create_time DESC
+        LIMIT 20
+    </select>
 
 </mapper>
 
