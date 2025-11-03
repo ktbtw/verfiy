@@ -34,6 +34,9 @@ public class DexCompileService {
     @Value("${dex.compile.timeout:60}")
     private int timeoutSeconds;
 
+    @Value("${dex.compile.javac-path:javac}")
+    private String javacPath;
+
     /**
      * 编译多个 Java 文件为 Dex
      */
@@ -327,7 +330,7 @@ public class DexCompileService {
         
         // 构建 javac 命令
         List<String> command = new ArrayList<>();
-        command.add("javac");
+        command.add(javacPath);  // 使用配置的 javac 路径
         command.add("-encoding");
         command.add("UTF-8");
         command.add("-source");
@@ -370,7 +373,7 @@ public class DexCompileService {
 
         // 执行 javac
         List<String> command = new ArrayList<>();
-        command.add("javac");
+        command.add(javacPath);  // 使用配置的 javac 路径
         command.add("-classpath");
         command.add(classpathStr);
         command.add("-d");

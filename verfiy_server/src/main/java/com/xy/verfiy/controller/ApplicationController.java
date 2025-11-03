@@ -123,6 +123,7 @@ public class ApplicationController {
         result.put("announcement", app.getAnnouncement());
         result.put("version", app.getVersion());
         result.put("changelog", app.getChangelog());
+        result.put("updateUrl", app.getUpdateUrl());
         result.put("redeemExtra", app.getRedeemExtra());
         result.put("appType", app.getAppType());
         return result;

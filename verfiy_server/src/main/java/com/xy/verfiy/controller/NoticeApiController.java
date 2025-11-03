@@ -51,6 +51,7 @@ public class NoticeApiController {
         plain.put("announcement", app.getAnnouncement());
         plain.put("version", app.getVersion());
         plain.put("changelog", app.getChangelog());
+        plain.put("updateUrl", app.getUpdateUrl());
 
         // 统一返回：根据 app.getSecure() 决定是否加密
         return makeResponse(app, secret, ResponseEntity.ok(plain));

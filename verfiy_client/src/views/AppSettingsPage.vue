@@ -183,6 +183,10 @@
             <label class="form-label">更新日志</label>
             <textarea v-model="form.changelog" class="form-textarea" rows="4" placeholder="输入更新日志"></textarea>
           </div>
+          <div class="form-group">
+            <label class="form-label">更新链接</label>
+            <input v-model="form.updateUrl" type="text" class="form-input" placeholder="输入更新下载链接，例如: https://example.com/download/app-latest.apk" />
+          </div>
           <div class="form-actions">
             <button @click="saveVersion" :disabled="saving" class="btn btn-primary">
               <svg v-if="saving" class="btn-spinner" viewBox="0 0 20 20" fill="currentColor">
@@ -274,6 +278,7 @@ type Application = {
   announcement?: string
   version?: string
   changelog?: string
+  updateUrl?: string
   redeemExtra?: string
   redeemExtraMode?: string
 }
@@ -302,6 +307,7 @@ const form = reactive({
   announcement: '',
   version: '',
   changelog: '',
+  updateUrl: '',
   redeemExtra: '',
   redeemExtraMode: 'SUCCESS_ONLY'
 })
@@ -386,6 +392,7 @@ async function loadApp() {
     form.announcement = data.announcement || ''
     form.version = data.version || ''
     form.changelog = data.changelog || ''
+    form.updateUrl = data.updateUrl || ''
     form.redeemExtra = data.redeemExtra || ''
     form.redeemExtraMode = data.redeemExtraMode || 'SUCCESS_ONLY'
   } catch (e: any) {
@@ -473,7 +480,8 @@ async function saveVersion() {
       id: app.value.id,
       announcement: form.announcement,
       version: form.version,
-      changelog: form.changelog
+      changelog: form.changelog,
+      updateUrl: form.updateUrl
     })
     if (data.success) {
       app.value = data.app

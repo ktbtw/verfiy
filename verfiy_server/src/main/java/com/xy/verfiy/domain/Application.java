@@ -15,6 +15,7 @@ public class Application {
     private String announcement; // 全局公告（该应用）
     private String version;
     private String changelog;
+    private String updateUrl; // 更新下载链接
     private LocalDateTime createdAt;
     // 自定义核销成功返回的参数(JSON)
     private String redeemExtra;
@@ -47,6 +48,8 @@ public class Application {
     public void setVersion(String version) { this.version = version; }
     public String getChangelog() { return changelog; }
     public void setChangelog(String changelog) { this.changelog = changelog; }
+    public String getUpdateUrl() { return updateUrl; }
+    public void setUpdateUrl(String updateUrl) { this.updateUrl = updateUrl; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public String getRedeemExtra() { return redeemExtra; }
