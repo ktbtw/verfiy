@@ -553,5 +553,59 @@ public class DexCompileService {
     public List<DexCompileTask> getAllTasks(Long userId) {
         return dexCompileTaskMapper.findAllByUserId(userId);
     }
+    
+    /**
+     * 删除编译任务（包括dex文件）
+     */
+    public void deleteTask(String taskId) {
+        DexCompileTask task = dexCompileTaskMapper.findByTaskId(taskId);
+        if (task != null && task.getDexFilePath() != null) {
+            // 删除dex文件
+            try {
+                Path dexFile = Paths.get(task.getDexFilePath());
+                if (Files.exists(dexFile)) {
+                    Files.delete(dexFile);
+                    log.info("已删除 Dex 文件: {}", task.getDexFilePath());
+                }
+            } catch (IOException e) {
+                log.warn("删除 Dex 文件失败: {}", task.getDexFilePath(), e);
+            }
+        }
+        
+        // 删除数据库记录
+        dexCompileTaskMapper.deleteByTaskId(taskId);
+        log.info("已删除编译任务记录: {}", taskId);
+    }
+    
+    /**
+     * 删除某个用户的所有编译任务
+     */
+    public int deleteAllTasksByUserId(Long userId) {
+        // 获取用户的所有任务
+        List<DexCompileTask> tasks = dexCompileTaskMapper.findAllByUserId(userId);
+        
+        int deletedCount = 0;
+        for (DexCompileTask task : tasks) {
+            try {
+                // 删除dex文件
+                if (task.getDexFilePath() != null) {
+                    Path dexFile = Paths.get(task.getDexFilePath());
+                    if (Files.exists(dexFile)) {
+                        Files.delete(dexFile);
+                        log.info("已删除 Dex 文件: {}", task.getDexFilePath());
+                    }
+                }
+                
+                // 删除数据库记录
+                dexCompileTaskMapper.deleteByTaskId(task.getTaskId());
+                deletedCount++;
+            } catch (Exception e) {
+                log.warn("删除任务失败: {}", task.getTaskId(), e);
+            }
+        }
+        
+        log.info("用户 {} 共删除 {} 个编译任务", userId, deletedCount);
+        return deletedCount;
+    }
 }
 

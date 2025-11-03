@@ -293,6 +293,88 @@ public class DexCompileController {
     }
     
     /**
+     * 删除编译任务
+     */
+    @DeleteMapping("/task/{taskId}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, Object>> deleteTask(@PathVariable String taskId, Authentication authentication) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            // 获取当前用户
+            Long userId = getCurrentUserId(authentication);
+            if (userId == null) {
+                response.put("success", false);
+                response.put("message", "无法获取当前用户信息");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+            }
+            
+            // 获取任务信息
+            DexCompileTask task = dexCompileService.getTask(taskId);
+            if (task == null) {
+                response.put("success", false);
+                response.put("message", "任务不存在");
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
+            
+            // 检查任务是否属于当前用户
+            if (!task.getUserId().equals(userId)) {
+                response.put("success", false);
+                response.put("message", "无权删除此任务");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+            }
+            
+            // 删除任务（包括dex文件）
+            dexCompileService.deleteTask(taskId);
+            
+            response.put("success", true);
+            response.put("message", "任务已删除");
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("删除任务异常", e);
+            response.put("success", false);
+            response.put("message", "删除失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    /**
+     * 批量删除当前用户的所有编译任务
+     */
+    @DeleteMapping("/tasks/all")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, Object>> deleteAllTasks(Authentication authentication) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            // 获取当前用户
+            Long userId = getCurrentUserId(authentication);
+            if (userId == null) {
+                response.put("success", false);
+                response.put("message", "无法获取当前用户信息");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+            }
+            
+            // 删除当前用户的所有任务
+            int deletedCount = dexCompileService.deleteAllTasksByUserId(userId);
+            
+            response.put("success", true);
+            response.put("message", "已删除 " + deletedCount + " 个任务");
+            response.put("deletedCount", deletedCount);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("批量删除任务异常", e);
+            response.put("success", false);
+            response.put("message", "删除失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    /**
      * 查询当前用户的编译次数配额
      */
     @GetMapping("/quota")

@@ -289,6 +289,21 @@ const taskListDialog = ref({
   tasks: [] as any[]
 })
 
+// 删除任务确认对话框
+const deleteTaskDialog = ref({
+  visible: false,
+  task: null as any
+})
+
+// 全部删除确认对话框
+const deleteAllTasksDialog = ref({
+  visible: false
+})
+
+// 长按相关
+const longPressTimer = ref<number | null>(null)
+const isLongPress = ref(false)
+
 const toast = ref({
   show: false,
   message: '',
@@ -678,9 +693,9 @@ function confirmNewItem() {
     const lastPart = parts[parts.length - 1]
     if (!lastPart) {
       showToast('文件名不能为空', 'error')
-      return
-    }
-    
+    return
+  }
+  
     // 统一添加 .java 后缀（前面已经去掉了，所以这里必然不会重复）
     const fileName = `${lastPart}.java`
     const filePath = `${currentPath}/${fileName}`
@@ -693,7 +708,7 @@ function confirmNewItem() {
     }
     
     const newFileNode: FileNode = {
-      name: fileName,
+    name: fileName,
       type: 'file',
       path: filePath,
       content: generateClassTemplate(filePath, fileName)
@@ -704,9 +719,9 @@ function confirmNewItem() {
     }
     currentParent.children.push(newFileNode)
     console.log('[JavaEditor] confirmNewItem -> created file', { name: fileName, path: filePath })
-    
-    // 强制触发响应式更新
-    refreshFileTree()
+  
+  // 强制触发响应式更新
+  refreshFileTree()
     
     // 打开新创建的文件
     fileContents.value.set(filePath, newFileNode.content || '')
@@ -949,11 +964,11 @@ async function handleCompile() {
       // 刷新配额显示
       fetchUserQuota()
     } else {
-      compileResult.value = {
-        success: false,
-        message: error.response?.data?.compileLog || error.response?.data?.message || error.message || '编译请求失败'
-      }
-      showToast('编译请求失败', 'error')
+    compileResult.value = {
+      success: false,
+      message: error.response?.data?.compileLog || error.response?.data?.message || error.message || '编译请求失败'
+    }
+    showToast('编译请求失败', 'error')
     }
   } finally {
     compiling.value = false
@@ -1150,22 +1165,116 @@ async function showTaskList() {
   }
 }
 
-// 从任务列表中加载任务
+// 从任务列表中下载任务
 function loadTaskFromList(task: any) {
+  // 如果是长按，不执行下载
+  if (isLongPress.value) {
+    return
+  }
+  
   if (task.success && !task.downloaded) {
+    // 设置当前任务ID
     compileTaskId.value = task.taskId
     compileResult.value = {
       success: true,
       message: `编译成功！（${new Date(task.createTime).toLocaleString()}）`,
       taskId: task.taskId
     }
+    // 关闭任务列表
     taskListDialog.value.visible = false
-    showToast('已加载该编译任务', 'success')
-    saveToLocalStorage()
+    // 直接触发下载
+    handleDownload()
   } else if (task.downloaded) {
     showToast('该任务已被下载', 'error')
   } else {
     showToast('该任务编译失败', 'error')
+  }
+}
+
+// 长按开始
+function handleTaskPress(task: any) {
+  isLongPress.value = false
+  longPressTimer.value = window.setTimeout(() => {
+    isLongPress.value = true
+    // 显示删除确认对话框
+    deleteTaskDialog.value.task = task
+    deleteTaskDialog.value.visible = true
+  }, 500) // 500ms 判定为长按
+}
+
+// 长按结束/取消
+function handleTaskPressEnd() {
+  if (longPressTimer.value) {
+    clearTimeout(longPressTimer.value)
+    longPressTimer.value = null
+  }
+  // 延迟重置长按状态，避免影响点击事件
+  setTimeout(() => {
+    isLongPress.value = false
+  }, 100)
+}
+
+// 确认删除任务
+async function confirmDeleteTask() {
+  const task = deleteTaskDialog.value.task
+  if (!task) return
+  
+  deleteTaskDialog.value.visible = false
+  
+  try {
+    const response = await http.delete(`/admin/dex-compile/task/${task.taskId}`)
+    
+    if (response.data && response.data.success) {
+      showToast('任务已删除', 'success')
+      
+      // 如果删除的是当前任务，清除状态
+      if (compileTaskId.value === task.taskId) {
+        compileTaskId.value = null
+        compileResult.value = null
+      }
+      
+      // 刷新任务列表
+      showTaskList()
+    } else {
+      showToast(response.data?.message || '删除失败', 'error')
+    }
+  } catch (error: any) {
+    console.error('[JavaEditor] 删除任务失败:', error)
+    showToast(error.response?.data?.message || '删除失败', 'error')
+  }
+}
+
+// 显示全部删除确认对话框
+function showDeleteAllTasksDialog() {
+  if (taskListDialog.value.tasks.length === 0) {
+    showToast('没有可删除的任务', 'error')
+    return
+  }
+  deleteAllTasksDialog.value.visible = true
+}
+
+// 确认全部删除
+async function confirmDeleteAllTasks() {
+  deleteAllTasksDialog.value.visible = false
+  
+  try {
+    const response = await http.delete('/admin/dex-compile/tasks/all')
+    
+    if (response.data && response.data.success) {
+      showToast(`已删除 ${response.data.deletedCount} 个任务`, 'success')
+      
+      // 清除当前任务状态
+      compileTaskId.value = null
+      compileResult.value = null
+      
+      // 刷新任务列表
+      showTaskList()
+    } else {
+      showToast(response.data?.message || '删除失败', 'error')
+    }
+  } catch (error: any) {
+    console.error('[JavaEditor] 批量删除任务失败:', error)
+    showToast(error.response?.data?.message || '删除失败', 'error')
   }
 }
 
@@ -1206,9 +1315,9 @@ onMounted(async () => {
   
   // 如果没有缓存，加载初始文件
   if (!loadedFromCache) {
-    const initialFile = findNode(fileTree.value, currentFilePath.value)
-    if (initialFile && initialFile.type === 'file') {
-      fileContents.value.set(initialFile.path, initialFile.content || '')
+  const initialFile = findNode(fileTree.value, currentFilePath.value)
+  if (initialFile && initialFile.type === 'file') {
+    fileContents.value.set(initialFile.path, initialFile.content || '')
     }
   }
   
@@ -1879,6 +1988,7 @@ onBeforeUnmount(() => {
           <h3>编译任务列表</h3>
           <button @click="taskListDialog.visible = false" class="btn-close">×</button>
         </div>
+        <div class="task-hint">💡 点击下载，长按删除</div>
         <div class="dialog-body">
           <div v-if="taskListDialog.loading" class="task-loading">
             加载中...
@@ -1891,11 +2001,23 @@ onBeforeUnmount(() => {
               v-for="task in taskListDialog.tasks" 
               :key="task.taskId" 
               class="task-item"
-              :class="{ 'task-item-clickable': task.success && !task.downloaded }"
+              :class="{ 
+                'task-item-clickable': task.success && !task.downloaded,
+                'task-item-current': task.taskId === compileTaskId
+              }"
               @click="loadTaskFromList(task)"
+              @mousedown="handleTaskPress(task)"
+              @mouseup="handleTaskPressEnd"
+              @mouseleave="handleTaskPressEnd"
+              @touchstart="handleTaskPress(task)"
+              @touchend="handleTaskPressEnd"
+              @touchcancel="handleTaskPressEnd"
             >
               <div class="task-info">
-                <div class="task-time">{{ new Date(task.createTime).toLocaleString() }}</div>
+                <div class="task-time">
+                  {{ new Date(task.createTime).toLocaleString() }}
+                  <span v-if="task.taskId === compileTaskId" class="current-badge">当前</span>
+                </div>
                 <div class="task-id">ID: {{ task.taskId.substring(0, 8) }}...</div>
               </div>
               <div class="task-status" :class="getTaskStatusClass(task)">
@@ -1905,7 +2027,76 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="dialog-footer">
+          <button @click="showDeleteAllTasksDialog" class="btn-danger" :disabled="taskListDialog.tasks.length === 0">
+            全部删除
+          </button>
           <button @click="taskListDialog.visible = false" class="btn-cancel">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除任务确认对话框 -->
+    <div v-if="deleteTaskDialog.visible" class="dialog-overlay" @click="deleteTaskDialog.visible = false">
+      <div class="dialog dialog-confirm" @click.stop>
+        <div class="dialog-header">
+          <h3>确认删除任务</h3>
+          <button @click="deleteTaskDialog.visible = false" class="btn-close">×</button>
+        </div>
+        <div class="dialog-body">
+          <div class="confirm-message">
+            <svg viewBox="0 0 20 20" fill="currentColor" class="warning-icon">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            <div>
+              <p class="confirm-title"><strong>确定要删除这个编译任务吗？</strong></p>
+              <p class="confirm-subtitle" v-if="deleteTaskDialog.task && !deleteTaskDialog.task.downloaded">
+                此任务尚未下载，删除后对应的 DEX 文件也将被删除
+              </p>
+              <p class="confirm-subtitle" v-else>
+                此任务已被下载，删除只会清除记录
+              </p>
+              <p class="confirm-subtitle" style="margin-top: 0.5rem;">
+                任务时间：{{ deleteTaskDialog.task ? new Date(deleteTaskDialog.task.createTime).toLocaleString() : '' }}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button @click="deleteTaskDialog.visible = false" class="btn-cancel">取消</button>
+          <button @click="confirmDeleteTask" class="btn-danger">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 全部删除确认对话框 -->
+    <div v-if="deleteAllTasksDialog.visible" class="dialog-overlay" @click="deleteAllTasksDialog.visible = false">
+      <div class="dialog dialog-confirm" @click.stop>
+        <div class="dialog-header">
+          <h3>确认全部删除</h3>
+          <button @click="deleteAllTasksDialog.visible = false" class="btn-close">×</button>
+        </div>
+        <div class="dialog-body">
+          <div class="confirm-message">
+            <svg viewBox="0 0 20 20" fill="currentColor" class="warning-icon">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            <div>
+              <p class="confirm-title"><strong>确定要删除所有编译任务吗？</strong></p>
+              <p class="confirm-subtitle">
+                此操作将删除您的 <strong>{{ taskListDialog.tasks.length }}</strong> 个编译任务
+              </p>
+              <p class="confirm-subtitle">
+                未下载的任务对应的 DEX 文件也将被删除
+              </p>
+              <p class="confirm-subtitle" style="color: #dc2626; font-weight: 600; margin-top: 0.75rem;">
+                ⚠️ 此操作不可恢复！
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button @click="deleteAllTasksDialog.visible = false" class="btn-cancel">取消</button>
+          <button @click="confirmDeleteAllTasks" class="btn-danger">全部删除</button>
         </div>
       </div>
     </div>
@@ -2386,9 +2577,21 @@ onBeforeUnmount(() => {
 .dialog-footer {
   display: flex;
   gap: 0.5rem;
-  justify-content: flex-end;
+  justify-content: space-between;
   padding: 1rem 1.5rem;
   border-top: 1px solid #e5e7eb;
+}
+
+.dialog-footer .btn-danger:disabled {
+  background: #d1d5db;
+  color: #6b7280;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.dialog-footer .btn-danger:disabled:hover {
+  background: #d1d5db;
+  transform: none;
 }
 
 .btn-cancel,
@@ -2496,6 +2699,15 @@ onBeforeUnmount(() => {
   flex-direction: column;
 }
 
+.task-hint {
+  padding: 0.75rem 1.5rem;
+  background: #fffbeb;
+  border-bottom: 1px solid #fef3c7;
+  color: #92400e;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
 .dialog-tasks .dialog-body {
   flex: 1;
   overflow-y: auto;
@@ -2526,6 +2738,7 @@ onBeforeUnmount(() => {
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
+  user-select: none;
   transition: all 0.2s;
 }
 
@@ -2540,6 +2753,12 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
+.task-item-current {
+  background: #eff6ff;
+  border: 2px solid #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
 .task-info {
   flex: 1;
 }
@@ -2549,6 +2768,19 @@ onBeforeUnmount(() => {
   font-weight: 500;
   color: #111827;
   margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.current-badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  background: #3b82f6;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 9999px;
 }
 
 .task-id {
