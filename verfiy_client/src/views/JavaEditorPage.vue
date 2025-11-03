@@ -19,6 +19,7 @@ interface FileNode {
   content?: string
   children?: FileNode[]
   expanded?: boolean
+  protected?: boolean // 受保护的文件，不允许删除、重命名、修改
 }
 
 const FileTreeNode = defineComponent({
@@ -120,19 +121,41 @@ const FileTreeNode = defineComponent({
             })
           ])
 
+      // 受保护文件的锁图标
+      const lockIcon = props.node.protected
+        ? h('svg', {
+            viewBox: '0 0 20 20',
+            fill: 'currentColor',
+            style: {
+              width: '0.75rem',
+              height: '0.75rem',
+              marginLeft: 'auto',
+              color: '#f59e0b',
+              flexShrink: '0'
+            }
+          }, [
+            h('path', {
+              'fill-rule': 'evenodd',
+              d: 'M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z',
+              'clip-rule': 'evenodd'
+            })
+          ])
+        : null
+
       const label = h(
         'div',
         {
           class: {
             'node-label': true,
             active: isActive.value,
-            folder: props.node.type === 'folder'
+            folder: props.node.type === 'folder',
+            protected: props.node.protected
           },
           style: { paddingLeft: `${props.depth * 16 + 8}px` },
           onClick: handleClick,
           onContextmenu: handleContextMenu
         },
-        [iconSvg, h('span', props.node.name)]
+        [iconSvg, h('span', props.node.name), lockIcon].filter(Boolean)
       )
 
       let childrenNodes: ReturnType<typeof h>[] = []
@@ -181,22 +204,276 @@ const fileTree = ref<FileNode>({
               content: `package com.example;
 
 import android.content.Context;
+import android.widget.Toast;
+import com.xy.ithook.Util.HookHelper;
 import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 public class MyHook {
     
     /**
      * Hook 方法示例
-     * @param context 上下文对象
-     * @param classLoader 类加载器
+     * 注意：必须是无参数的静态方法
      */
-    public static void hookMethod(Context context, ClassLoader classLoader) {
-        // 在这里编写你的 Hook 代码
-        
+    public static void hookMethod() {
+        try {
+            // 获取目标应用的类加载器（使用 HookHelper 工具类）
+            ClassLoader classLoader = HookHelper.getHostClassLoader();
+            Context context = HookHelper.getHostContext();
+            
+            // 示例1: Hook Activity 的 onCreate 方法
+            XposedHelpers.findAndHookMethod(
+                "android.app.Activity",
+                HookHelper.getHostClassLoader(),
+                "onCreate",
+                android.os.Bundle.class,
+                new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                        // 在 Activity 创建后执行
+                        Context activityContext = (Context) param.thisObject;
+                        String activityName = activityContext.getClass().getName();
+                        XposedBridge.log("Activity 已创建: " + activityName);
+                    }
+                }
+            );
+            
+            // 示例2: Hook 某个方法并修改返回值
+            // XposedHelpers.findAndHookMethod(
+            //     "com.example.TargetClass",
+            //     HookHelper.getHostClassLoader(),
+            //     "isVip",
+            //     new XC_MethodHook() {
+            //         @Override
+            //         protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+            //             // 强制返回 true
+            //             param.setResult(true);
+            //         }
+            //     }
+            // );
+            
+            // 示例3: Hook 方法并修改参数
+            // XposedHelpers.findAndHookMethod(
+            //     "com.example.TargetClass",
+            //     HookHelper.getHostClassLoader(),
+            //     "checkPermission",
+            //     String.class,
+            //     new XC_MethodHook() {
+            //         @Override
+            //         protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+            //             // 修改第一个参数
+            //             param.args[0] = "modified_value";
+            //         }
+            //     }
+            // );
+            
+            // 示例4: 拦截方法（完全阻止原方法执行）
+            // XposedHelpers.findAndHookMethod(
+            //     "com.example.TargetClass",
+            //     HookHelper.getHostClassLoader(),
+            //     "showAd",
+            //     new XC_MethodHook() {
+            //         @Override
+            //         protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+            //             // 设置结果后，原方法不会执行
+            //             param.setResult(null);
+            //             XposedBridge.log("已拦截广告方法");
+            //         }
+            //     }
+            // );
+            
+            // 示例5: 使用 XC_MethodReplacement 完全替换方法
+            // XposedHelpers.findAndHookMethod(
+            //     "com.example.TargetClass",
+            //     HookHelper.getHostClassLoader(),
+            //     "validateLicense",
+            //     new XC_MethodReplacement() {
+            //         @Override
+            //         protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
+            //             // 完全替换原方法，直接返回 true
+            //             return true;
+            //         }
+            //     }
+            // );
+            
+            XposedBridge.log("MyHook 加载成功！");
+            
+        } catch (Throwable e) {
+            XposedBridge.log("MyHook 错误: " + e.getMessage());
+        }
     }
 }
 `
+            }
+          ]
+        },
+        {
+          name: 'xy',
+          type: 'folder',
+          path: 'src/com/xy',
+          expanded: false,
+          children: [
+            {
+              name: 'ithook',
+              type: 'folder',
+              path: 'src/com/xy/ithook',
+              expanded: false,
+              children: [
+                {
+                  name: 'Util',
+                  type: 'folder',
+                  path: 'src/com/xy/ithook/Util',
+                  expanded: false,
+                  children: [
+                    {
+                      name: 'HookHelper.java',
+                      type: 'file',
+                      path: 'src/com/xy/ithook/Util/HookHelper.java',
+                      protected: true,
+                      content: `package com.xy.ithook.Util;
+
+import android.content.Context;
+import android.content.pm.PackageManager;
+import android.content.res.XModuleResources;
+import android.provider.Settings;
+import android.text.TextUtils;
+
+import java.lang.ref.WeakReference;
+import java.util.UUID;
+
+import de.robv.android.xposed.callbacks.XC_LoadPackage;
+
+
+public class HookHelper {
+    private static ClassLoader moduleClassLoader;
+    private static ClassLoader hostClassLoader;
+    private static String modulePath;
+    private static WeakReference<Context> moduleContextRef;
+    private static WeakReference<Context> hostContextRef;
+    private static String versionName;
+    private static int versionCode;
+    private static XC_LoadPackage.LoadPackageParam loadPackageParam;
+    private static XModuleResources moduleResources;
+    private static String packageName;
+
+    public static String getPackageName() {
+        return packageName;
+    }
+
+    public static void setPackageName(String packageName) {
+        HookHelper.packageName = packageName;
+    }
+
+    public static XModuleResources getModuleResources() {
+        return moduleResources;
+    }
+    public static Context getModuleContext() {
+        if (moduleContextRef.get() != null) {
+            return moduleContextRef.get();
+        }
+        if (hostContextRef.get() == null) {
+            return null;
+        }
+        try {
+            Context context = hostContextRef.get().createPackageContext(
+                   "com.xy.ithook",
+                    Context.CONTEXT_IGNORE_SECURITY | Context.CONTEXT_INCLUDE_CODE
+            );
+            setModuleContext(context);
+            return context;
+        } catch (PackageManager.NameNotFoundException e) {
+            return null;
+        }
+    }
+    public static void setModuleResources(XModuleResources moduleResources) {
+        HookHelper.moduleResources = moduleResources;
+    }
+
+    public static String getVersionName() {
+        return versionName;
+    }
+
+    public static void setVersionName(String versionName) {
+        HookHelper.versionName = versionName;
+    }
+
+    public static int getVersionCode() {
+        return versionCode;
+    }
+
+    public static void setVersionCode(int versionCode) {
+        HookHelper.versionCode = versionCode;
+    }
+
+    public static XC_LoadPackage.LoadPackageParam getLoadPackageParam() {
+        return loadPackageParam;
+    }
+
+    public static void setLoadPackageParam(XC_LoadPackage.LoadPackageParam loadPackageParam) {
+        HookHelper.loadPackageParam = loadPackageParam;
+    }
+
+    public static String getAndroidId(){
+        try {
+            if (HookHelper.getHostContext() != null) {
+                String androidId = Settings.Secure.getString(
+                        HookHelper.getHostContext().getContentResolver(),
+                        Settings.Secure.ANDROID_ID);
+                if (!TextUtils.isEmpty(androidId)) {
+                    return androidId;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return UUID.randomUUID().toString();
+    }
+    public static String getModulePath() {
+        return modulePath;
+    }
+
+    public static void setModulePath(String modulePath) {
+        HookHelper.modulePath = modulePath;
+    }
+
+
+
+
+    public static void setModuleContext(Context moduleContext) {
+        moduleContextRef = moduleContext == null ? null : new WeakReference<>(moduleContext);
+    }
+
+    public static Context getHostContext() {
+        return hostContextRef == null ? null : hostContextRef.get();
+    }
+
+    public static void setHostContext(Context hostContext) {
+        hostContextRef = hostContext == null ? null : new WeakReference<>(hostContext);
+    }
+
+
+
+
+    public static ClassLoader getHostClassLoader() {
+        return hostClassLoader;
+    }
+
+    public static void setHostClassLoader(ClassLoader hostClassLoader) {
+        HookHelper.hostClassLoader = hostClassLoader;
+    }
+
+    public static void setModuleClassLoader(ClassLoader classLoader){
+        moduleClassLoader=classLoader;
+    }
+    public static ClassLoader getModuleClassLoader(){
+        return moduleClassLoader;
+    }
+}
+`
+                    }
+                  ]
+                }
+              ]
             }
           ]
         }
@@ -331,6 +608,9 @@ const SETTINGS_STORAGE_KEY = 'java-editor-settings'
 
 // 常见类的导入映射表（全局定义，供自动导包和快速修复使用）
 const importMap: Record<string, string> = {
+  // 工具类
+  'HookHelper': 'import com.xy.ithook.Util.HookHelper;',
+  
   // Xposed
   'XC_MethodHook': 'import de.robv.android.xposed.XC_MethodHook;',
   'XC_MethodReplacement': 'import de.robv.android.xposed.XC_MethodReplacement;',
@@ -433,9 +713,12 @@ function saveToLocalStorage() {
     const storageKey = getStorageKey()
     console.log('[JavaEditor] 保存缓存使用 key:', storageKey)
     
-    // 保存当前编辑器内容到 fileContents
+    // 保存当前编辑器内容到 fileContents（排除受保护的文件）
     if (currentFilePath.value && editor) {
-      fileContents.value.set(currentFilePath.value, editor.getValue())
+      const currentNode = findNode(fileTree.value, currentFilePath.value)
+      if (!currentNode?.protected) {
+        fileContents.value.set(currentFilePath.value, editor.getValue())
+      }
     }
     
     // 准备要保存的数据
@@ -774,7 +1057,10 @@ function collectAllFiles(node: FileNode, files: Map<string, string> = new Map())
   if (node.type === 'file') {
     // 去掉 src/ 前缀，只保留包路径
     const relativePath = node.path.replace(/^src\//, '')
-    const content = fileContents.value.get(node.path) || node.content || ''
+    // 受保护的文件使用原始内容，非受保护的文件从 fileContents 读取
+    const content = node.protected 
+      ? (node.content || '')
+      : (fileContents.value.get(node.path) || node.content || '')
     files.set(relativePath, content)
   } else if (node.children) {
     node.children.forEach(child => collectAllFiles(child, files))
@@ -799,13 +1085,17 @@ function selectFile(node: FileNode) {
     console.log('[JavaEditor] selectFile CALLED', {
       nodePath: node.path,
       nodeType: node.type,
-      currentFilePath: currentFilePath.value
+      currentFilePath: currentFilePath.value,
+      protected: node.protected
     })
     
-    // 保存当前文件内容
+    // 保存当前文件内容（只保存非受保护的文件）
     if (currentFilePath.value && editor) {
-      console.log('[JavaEditor] selectFile -> storing content for', currentFilePath.value)
-      fileContents.value.set(currentFilePath.value, editor.getValue())
+      const currentNode = findNode(fileTree.value, currentFilePath.value)
+      if (!currentNode?.protected) {
+        console.log('[JavaEditor] selectFile -> storing content for', currentFilePath.value)
+        fileContents.value.set(currentFilePath.value, editor.getValue())
+      }
     }
     
     // 切换到新文件
@@ -816,6 +1106,8 @@ function selectFile(node: FileNode) {
     if (editor) {
       console.log('[JavaEditor] selectFile -> setting editor content length', content.length)
       editor.setValue(content)
+      // 设置编辑器只读状态
+      editor.updateOptions({ readOnly: !!node.protected })
     }
   }
 }
@@ -1013,7 +1305,6 @@ function generateClassTemplate(filePath: string, fileName: string): string {
   
   return `package ${packageName};
 
-import android.content.Context;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 
@@ -1144,9 +1435,12 @@ function confirmDelete() {
 
 // ============= 编译相关 =============
 async function handleCompile() {
-  // 保存当前编辑器内容
+  // 保存当前编辑器内容（排除受保护的文件）
   if (currentFilePath.value && editor) {
-    fileContents.value.set(currentFilePath.value, editor.getValue())
+    const currentNode = findNode(fileTree.value, currentFilePath.value)
+    if (!currentNode?.protected) {
+      fileContents.value.set(currentFilePath.value, editor.getValue())
+    }
   }
   
   // 收集所有文件
@@ -1604,6 +1898,57 @@ onMounted(async () => {
     completionProvider = monaco.languages.registerCompletionItemProvider('java', {
       provideCompletionItems: () => {
         const suggestions = [
+          // === 工具类 ===
+          {
+            label: 'HookHelper',
+            kind: monaco.languages.CompletionItemKind.Class,
+            insertText: 'HookHelper',
+            documentation: 'Hook 工具类，提供获取 ClassLoader、Context 等常用功能',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.getHostClassLoader',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.getHostClassLoader()',
+            documentation: '获取目标应用的 ClassLoader',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.getHostContext',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.getHostContext()',
+            documentation: '获取目标应用的 Context',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.getAndroidId',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.getAndroidId()',
+            documentation: '获取设备 Android ID',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.getModuleContext',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.getModuleContext()',
+            documentation: '获取模块的 Context',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.getModuleClassLoader',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.getModuleClassLoader()',
+            documentation: '获取模块的 ClassLoader',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.getPackageName',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.getPackageName()',
+            documentation: '获取目标应用包名',
+            range: null as any
+          },
+          
           // === Xposed 核心类 ===
           {
             label: 'XC_MethodHook',
@@ -2157,6 +2502,12 @@ onBeforeUnmount(() => {
         <div class="editor-header">
           <span v-if="currentFilePath">{{ currentFilePath }}</span>
           <span v-else class="placeholder">请选择一个文件</span>
+          <div v-if="currentFilePath && findNode(fileTree, currentFilePath)?.protected" class="protected-badge">
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+            </svg>
+            只读（系统文件）
+          </div>
         </div>
         <div ref="editorContainer" class="monaco-editor-container"></div>
       </div>
@@ -2184,11 +2535,17 @@ onBeforeUnmount(() => {
       <div v-if="contextMenu.node.type === 'folder'" class="menu-item" @click="showNewFileDialog(contextMenu.node)">
         新建类
       </div>
-      <div class="menu-item" @click="showRenameDialog(contextMenu.node)">
+      <div v-if="!contextMenu.node.protected" class="menu-item" @click="showRenameDialog(contextMenu.node)">
         重命名
       </div>
-      <div v-if="contextMenu.node.path !== 'src'" class="menu-item danger" @click="showDeleteDialog(contextMenu.node)">
+      <div v-if="contextMenu.node.path !== 'src' && !contextMenu.node.protected" class="menu-item danger" @click="showDeleteDialog(contextMenu.node)">
         删除
+      </div>
+      <div v-if="contextMenu.node.protected" class="menu-item disabled">
+        <svg viewBox="0 0 20 20" fill="currentColor" style="width: 14px; height: 14px; margin-right: 6px;">
+          <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+        </svg>
+        受保护的文件
       </div>
     </div>
 
@@ -2750,6 +3107,11 @@ onBeforeUnmount(() => {
   color: #f59e0b;
 }
 
+:deep(.node-label.protected) {
+  font-style: italic;
+  opacity: 0.8;
+}
+
 .resize-handle {
   width: 4px;
   background: #e5e7eb;
@@ -2782,6 +3144,9 @@ onBeforeUnmount(() => {
 }
 
 .editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 0.75rem 1rem;
   border-bottom: 1px solid #e5e7eb;
   font-size: 0.875rem;
@@ -2790,6 +3155,25 @@ onBeforeUnmount(() => {
 
 .editor-header .placeholder {
   color: #9ca3af;
+}
+
+.protected-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #92400e;
+}
+
+.protected-badge svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
 }
 
 .monaco-editor-container {
@@ -2885,6 +3269,18 @@ onBeforeUnmount(() => {
 
 .menu-item.danger:hover {
   background: #fee2e2;
+}
+
+.menu-item.disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+  display: flex;
+  align-items: center;
+  font-size: 0.75rem;
+}
+
+.menu-item.disabled:hover {
+  background: transparent;
 }
 
 .dialog-overlay {
