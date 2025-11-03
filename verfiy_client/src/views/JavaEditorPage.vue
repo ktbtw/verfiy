@@ -302,19 +302,27 @@ const fileTree = ref<FileNode>({
 说明：内置工具类，提供常用的 Hook 辅助方法
 注意：此类不会被编译到 Dex 文件中
 
-常用方法：
+Getter 方法（常用）：
   • HookHelper.getHostClassLoader()    - 获取目标应用类加载器
   • HookHelper.getHostContext()        - 获取目标应用上下文
   • HookHelper.getAndroidId()          - 获取设备 Android ID
   • HookHelper.getModuleContext()      - 获取模块上下文
+  • HookHelper.getModuleClassLoader()  - 获取模块类加载器
   • HookHelper.getPackageName()        - 获取目标应用包名
-
+  • HookHelper.getModuleResources()    - 获取模块资源对象
+  • HookHelper.getVersionName()        - 获取版本名称
+  • HookHelper.getVersionCode()        - 获取版本号
+  • HookHelper.getLoadPackageParam()   - 获取 LoadPackageParam 对象
+  • HookHelper.getModulePath()         - 获取模块路径
+  • HookHelper.getCurrentlyActivity()  - 获取当前 Activity
 示例：
   import com.xy.ithook.Util.HookHelper;
   
+  // 获取常用对象
   ClassLoader cl = HookHelper.getHostClassLoader();
   Context ctx = HookHelper.getHostContext();
   String androidId = HookHelper.getAndroidId();
+  String packageName = HookHelper.getPackageName();
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 使用提示
@@ -347,11 +355,11 @@ const fileTree = ref<FileNode>({
 `
     },
     {
-      name: 'src',
-      type: 'folder',
-      path: 'src',
-      expanded: true,
-      children: [
+  name: 'src',
+  type: 'folder',
+  path: 'src',
+  expanded: true,
+  children: [
     {
       name: 'com',
       type: 'folder',
@@ -525,6 +533,15 @@ public class HookHelper {
     private static XC_LoadPackage.LoadPackageParam loadPackageParam;
     private static XModuleResources moduleResources;
     private static String packageName;
+    private static WeakReference<Activity> currentlyActivity;
+
+    public static Activity getCurrentlyActivity() {
+        return currentlyActivity.get();
+    }
+
+    public static void setCurrentlyActivity(Activity activity) {
+        currentlyActivity = activity == null ? null : new WeakReference<>(activity);
+    }
 
     public static String getPackageName() {
         return packageName;
@@ -645,11 +662,11 @@ public class HookHelper {
               ]
             }
           ]
+            }
+          ]
         }
       ]
     }
-    ]
-  }
   ]
 })
 
@@ -888,7 +905,7 @@ function saveToLocalStorage() {
     if (currentFilePath.value && editor) {
       const currentNode = findNode(fileTree.value, currentFilePath.value)
       if (!currentNode?.protected) {
-        fileContents.value.set(currentFilePath.value, editor.getValue())
+      fileContents.value.set(currentFilePath.value, editor.getValue())
       }
     }
     
@@ -1233,13 +1250,13 @@ function collectAllFiles(node: FileNode, files: Map<string, string> = new Map())
   if (node.type === 'file') {
     // 只收集 src 目录下的文件，排除根目录的其他文件（如依赖说明.txt）
     if (node.path.startsWith('src/')) {
-      // 去掉 src/ 前缀，只保留包路径
-      const relativePath = node.path.replace(/^src\//, '')
+    // 去掉 src/ 前缀，只保留包路径
+    const relativePath = node.path.replace(/^src\//, '')
       // 受保护的文件使用原始内容，非受保护的文件从 fileContents 读取
       const content = node.protected 
         ? (node.content || '')
         : (fileContents.value.get(node.path) || node.content || '')
-      files.set(relativePath, content)
+    files.set(relativePath, content)
     }
   } else if (node.children) {
     node.children.forEach(child => collectAllFiles(child, files))
@@ -1272,8 +1289,8 @@ function selectFile(node: FileNode) {
     if (currentFilePath.value && editor) {
       const currentNode = findNode(fileTree.value, currentFilePath.value)
       if (!currentNode?.protected) {
-        console.log('[JavaEditor] selectFile -> storing content for', currentFilePath.value)
-        fileContents.value.set(currentFilePath.value, editor.getValue())
+      console.log('[JavaEditor] selectFile -> storing content for', currentFilePath.value)
+      fileContents.value.set(currentFilePath.value, editor.getValue())
       }
     }
     
@@ -1631,7 +1648,7 @@ async function handleCompile() {
   if (currentFilePath.value && editor) {
     const currentNode = findNode(fileTree.value, currentFilePath.value)
     if (!currentNode?.protected) {
-      fileContents.value.set(currentFilePath.value, editor.getValue())
+    fileContents.value.set(currentFilePath.value, editor.getValue())
     }
   }
   
@@ -2044,9 +2061,9 @@ onMounted(async () => {
   
   // 如果没有缓存，加载初始文件
   if (!loadedFromCache) {
-    const initialFile = findNode(fileTree.value, currentFilePath.value)
-    if (initialFile && initialFile.type === 'file') {
-      fileContents.value.set(initialFile.path, initialFile.content || '')
+  const initialFile = findNode(fileTree.value, currentFilePath.value)
+  if (initialFile && initialFile.type === 'file') {
+    fileContents.value.set(initialFile.path, initialFile.content || '')
     }
   } else {
     // 即使加载了缓存，也要确保受保护的文件内容是最新的
@@ -2119,6 +2136,13 @@ onMounted(async () => {
             range: null as any
           },
           {
+            label: 'HookHelper.getCurrentlyActivity',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.getCurrentlyActivity()',
+            documentation: '获取应用当前的 Activity',
+            range: null as any
+          },
+          {
             label: 'HookHelper.getAndroidId',
             kind: monaco.languages.CompletionItemKind.Method,
             insertText: 'HookHelper.getAndroidId()',
@@ -2144,6 +2168,123 @@ onMounted(async () => {
             kind: monaco.languages.CompletionItemKind.Method,
             insertText: 'HookHelper.getPackageName()',
             documentation: '获取目标应用包名',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.getModuleResources',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.getModuleResources()',
+            documentation: '获取模块资源对象 (XModuleResources)',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.getVersionName',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.getVersionName()',
+            documentation: '获取版本名称',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.getVersionCode',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.getVersionCode()',
+            documentation: '获取版本号',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.getLoadPackageParam',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.getLoadPackageParam()',
+            documentation: '获取 LoadPackageParam 对象',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.getModulePath',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.getModulePath()',
+            documentation: '获取模块路径',
+            range: null as any
+          },
+          
+          // === HookHelper Setter 方法 ===
+          {
+            label: 'HookHelper.setHostClassLoader',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.setHostClassLoader(${1:classLoader})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '设置目标应用的 ClassLoader',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.setHostContext',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.setHostContext(${1:context})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '设置目标应用的 Context',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.setModuleClassLoader',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.setModuleClassLoader(${1:classLoader})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '设置模块的 ClassLoader',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.setModuleContext',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.setModuleContext(${1:context})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '设置模块的 Context',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.setPackageName',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.setPackageName(${1:packageName})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '设置目标应用包名',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.setModuleResources',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.setModuleResources(${1:resources})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '设置模块资源对象',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.setVersionName',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.setVersionName(${1:versionName})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '设置版本名称',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.setVersionCode',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.setVersionCode(${1:versionCode})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '设置版本号',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.setLoadPackageParam',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.setLoadPackageParam(${1:loadPackageParam})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '设置 LoadPackageParam 对象',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.setModulePath',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.setModulePath(${1:modulePath})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '设置模块路径',
             range: null as any
           },
           
@@ -2680,15 +2821,15 @@ onBeforeUnmount(() => {
         <div class="file-tree">
           <!-- 渲染所有根节点的子节点 -->
           <template v-if="fileTree.children">
-            <FileTreeNode 
+          <FileTreeNode 
               v-for="child in fileTree.children" 
               :key="child.path"
               :node="child" 
-              @toggle="toggleFolder"
-              @select="selectFile"
-              @contextmenu="showContextMenu"
-              :currentPath="currentFilePath"
-            />
+            @toggle="toggleFolder"
+            @select="selectFile"
+            @contextmenu="showContextMenu"
+            :currentPath="currentFilePath"
+          />
           </template>
         </div>
       </div>
