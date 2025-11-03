@@ -395,15 +395,34 @@ public class DexCompileService {
         command.add("--output");
         command.add(outputDex.getParent().toString());
 
-        // 递归添加所有 .class 文件
-        List<Path> classFiles = new ArrayList<>();
+        // 递归添加所有 .class 文件（排除受保护的工具类）
+        List<Path> allClassFiles = new ArrayList<>();
+        List<Path> excludedFiles = new ArrayList<>();
+        
         Files.walk(classesDir)
                 .filter(p -> p.toString().endsWith(".class"))
-                .forEach(classFiles::add);
+                .forEach(p -> {
+                    if (isExcludedClass(p)) {
+                        excludedFiles.add(p);
+                    } else {
+                        allClassFiles.add(p);
+                    }
+                });
         
-        if (classFiles.isEmpty()) {
-            throw new RuntimeException("未找到任何 .class 文件");
+        if (allClassFiles.isEmpty()) {
+            throw new RuntimeException("未找到任何可编译的 .class 文件");
         }
+        
+        log.info("编译 Dex: 包含 {} 个 class 文件, 排除 {} 个工具类", 
+                allClassFiles.size(), excludedFiles.size());
+        if (!excludedFiles.isEmpty()) {
+            log.debug("排除的工具类: {}", excludedFiles.stream()
+                    .map(p -> p.getFileName().toString())
+                    .reduce((a, b) -> a + ", " + b)
+                    .orElse(""));
+        }
+        
+        List<Path> classFiles = allClassFiles;
         
         for (Path classFile : classFiles) {
             command.add(classFile.toString());
@@ -423,6 +442,21 @@ public class DexCompileService {
         }
 
         return executeCommand(command, classesDir.getParent());
+    }
+    
+    /**
+     * 判断是否是需要排除的 class 文件（受保护的工具类）
+     */
+    private boolean isExcludedClass(Path classPath) {
+        String path = classPath.toString().replace('\\', '/');
+        
+        // 排除 com/xy/ithook 包下的所有类（包括 HookHelper 等工具类）
+        if (path.contains("com/xy/ithook/")) {
+            log.debug("排除受保护的类: {}", classPath.getFileName());
+            return true;
+        }
+        
+        return false;
     }
 
     /**
