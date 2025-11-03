@@ -31,6 +31,7 @@ type HookItem = {
   setResultData: string
   setParams: Array<{ paramClass: string; paramData: string }>
   isIntercept: boolean
+  expanded: boolean
 }
 
 const hookItems = ref<HookItem[]>([])
@@ -114,7 +115,8 @@ async function loadHookInfo() {
               setResultClass: item.SetResult?.SetClass || '',
               setResultData: item.SetResult?.SetData || '',
               setParams: item.SetParam || [],
-              isIntercept: item.IsIntercept || false
+              isIntercept: item.IsIntercept || false,
+              expanded: false
             }))
           }
           
@@ -138,6 +140,12 @@ async function loadHookInfo() {
 }
 
 function addHookItem() {
+  // 折叠所有现有的 hook 配置
+  hookItems.value.forEach(h => {
+    h.expanded = false
+  })
+  
+  // 添加新的 hook 配置并展开
   hookItems.value.push({
     id: nextHookId++,
     className: '',
@@ -146,8 +154,27 @@ function addHookItem() {
     setResultClass: '',
     setResultData: '',
     setParams: [],
-    isIntercept: false
+    isIntercept: false,
+    expanded: true
   })
+}
+
+function toggleHookItem(item: HookItem) {
+  const newState = !item.expanded
+  // 如果要展开这个项目，先关闭所有其他项目
+  if (newState) {
+    hookItems.value.forEach(h => {
+      if (h.id !== item.id) {
+        h.expanded = false
+      }
+    })
+  }
+  item.expanded = newState
+}
+
+function toggleIntercept(item: HookItem, event: Event) {
+  event.stopPropagation()
+  item.isIntercept = !item.isIntercept
 }
 
 function removeHookItem(id: number) {
@@ -524,21 +551,62 @@ onUnmounted(() => {
           </div>
           
           <div v-else class="hook-items-list">
-            <div v-for="(item, idx) in hookItems" :key="item.id" class="hook-item-card">
-              <div class="hook-item-header">
+            <div v-for="(item, idx) in hookItems" :key="item.id" class="hook-item-card" :class="{ 'collapsed': !item.expanded }">
+              <!-- 折叠状态：一行显示 -->
+              <div v-if="!item.expanded" class="hook-item-collapsed" @click="toggleHookItem(item)">
                 <span class="hook-item-number">#{{ idx + 1 }}</span>
-                <label class="intercept-switch">
-                  <input type="checkbox" v-model="item.isIntercept" />
-                  <span>拦截模式</span>
-                </label>
-                <button @click="removeHookItem(item.id)" class="btn-remove-hook" title="删除此Hook">
+                <div class="hook-summary">
+                  <span class="hook-method-info">
+                    <span class="hook-label">Hook:</span>
+                    <code class="class-name">{{ item.className || '未设置类名' }}</code>
+                    <span class="separator">.</span>
+                    <code class="method-name">{{ item.methodName || '未设置方法' }}</code>
+                  </span>
+                  <span class="hook-return-info" v-if="!item.isIntercept && (item.setResultClass || item.setResultData)">
+                    <span class="return-label">返回值:</span>
+                    <code v-if="item.setResultClass">{{ item.setResultClass }}</code>
+                    <span v-if="item.setResultClass && item.setResultData" class="separator">=</span>
+                    <code v-if="item.setResultData" class="return-data">{{ item.setResultData }}</code>
+                  </span>
+                </div>
+                <button 
+                  @click.stop="toggleIntercept(item, $event)" 
+                  class="btn-intercept-toggle-inline" 
+                  :class="{ 'active': item.isIntercept }"
+                  :title="item.isIntercept ? '点击取消拦截' : '点击启用拦截'"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+                <button @click.stop="removeHookItem(item.id)" class="btn-remove-hook-inline" title="删除此Hook">
                   <svg viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
                   </svg>
                 </button>
               </div>
               
-              <div class="hook-item-body">
+              <!-- 展开状态：完整卡片 -->
+              <template v-else>
+                <div class="hook-item-header">
+                  <span class="hook-item-number">#{{ idx + 1 }}</span>
+                  <label class="intercept-switch">
+                    <input type="checkbox" v-model="item.isIntercept" />
+                    <span>拦截模式</span>
+                  </label>
+                  <button @click="toggleHookItem(item)" class="btn-collapse-hook" title="折叠">
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd" />
+                    </svg>
+                  </button>
+                  <button @click="removeHookItem(item.id)" class="btn-remove-hook" title="删除此Hook">
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              
+                <div class="hook-item-body">
                 <div class="form-row">
                   <div class="form-group">
                     <label class="form-label">类名 *</label>
@@ -644,6 +712,7 @@ onUnmounted(() => {
                   拦截模式：方法将被完全拦截，返回 null
                 </div>
               </div>
+              </template>
             </div>
           </div>
         </div>
@@ -1398,6 +1467,207 @@ onUnmounted(() => {
   box-shadow: 0 4px 12px rgba(79, 70, 229, 0.08);
 }
 
+.hook-item-card.collapsed {
+  padding: 0;
+}
+
+.hook-item-card.collapsed:hover {
+  border-color: rgba(79, 70, 229, 0.3);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.12);
+}
+
+/* 折叠状态：一行显示 */
+.hook-item-collapsed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.hook-item-collapsed:hover {
+  background: rgba(79, 70, 229, 0.02);
+}
+
+.hook-item-collapsed:active {
+  transform: scale(0.99);
+}
+
+.hook-summary {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hook-method-info {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 14px;
+  min-width: 0;
+}
+
+.hook-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.hook-method-info .class-name {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+  color: var(--brand);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hook-method-info .method-name {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+  color: #059669;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.hook-method-info .separator {
+  color: var(--text-2);
+  font-weight: 400;
+}
+
+.hook-return-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.return-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.hook-return-info code {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 12px;
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.hook-return-info .return-data {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.1);
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.btn-intercept-toggle-inline {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(156, 163, 175, 0.3);
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.btn-intercept-toggle-inline:hover {
+  background: rgba(156, 163, 175, 0.1);
+  border-color: rgba(156, 163, 175, 0.4);
+  transform: scale(1.05);
+}
+
+.btn-intercept-toggle-inline.active {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
+.btn-intercept-toggle-inline.active:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.btn-intercept-toggle-inline svg {
+  width: 14px;
+  height: 14px;
+}
+
+.btn-remove-hook-inline {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  background: transparent;
+  color: #ef4444;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.btn-remove-hook-inline:hover {
+  background: rgba(239, 68, 68, 0.1);
+  transform: scale(1.05);
+}
+
+.btn-remove-hook-inline svg {
+  width: 14px;
+  height: 14px;
+}
+
+.btn-collapse-hook {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(79, 70, 229, 0.3);
+  border-radius: 6px;
+  background: rgba(79, 70, 229, 0.05);
+  color: var(--brand);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  margin-left: auto;
+}
+
+.btn-collapse-hook:hover {
+  background: rgba(79, 70, 229, 0.1);
+  transform: scale(1.05);
+}
+
+.btn-collapse-hook svg {
+  width: 16px;
+  height: 16px;
+}
+
 .hook-item-header {
   display: flex;
   align-items: center;
@@ -1822,6 +2092,47 @@ onUnmounted(() => {
   .hook-item-card:hover {
     border-color: rgba(124, 58, 237, 0.3);
     box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
+  }
+  
+  .hook-item-collapsed:hover {
+    background: rgba(124, 58, 237, 0.08);
+  }
+  
+  .hook-method-info .class-name {
+    color: #c084fc;
+  }
+  
+  .hook-method-info .method-name {
+    color: #34d399;
+  }
+  
+  .hook-return-info code {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.15);
+  }
+  
+  .hook-return-info .return-data {
+    color: #60a5fa;
+    background: rgba(59, 130, 246, 0.15);
+  }
+  
+  .btn-intercept-toggle-inline {
+    border-color: rgba(156, 163, 175, 0.4);
+    color: #d1d5db;
+  }
+  
+  .btn-intercept-toggle-inline:hover {
+    background: rgba(156, 163, 175, 0.15);
+  }
+  
+  .btn-intercept-toggle-inline.active {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+  }
+  
+  .btn-intercept-toggle-inline.active:hover {
+    background: rgba(239, 68, 68, 0.2);
   }
   
   .hook-item-header {
