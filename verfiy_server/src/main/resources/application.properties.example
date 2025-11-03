@@ -58,3 +58,15 @@ server.ssl.enabled=false
 # Session 超时
 server.servlet.session.timeout=30m
 
+# Dex 编译配置
+# Android SDK 路径
+dex.compile.android-home=${ANDROID_HOME:/Users/yuminghao/Library/Android/sdk}
+# Build Tools 版本
+dex.compile.build-tools-version=36.0.0
+# 依赖 Jar 包目录
+dex.compile.jar-lib-path=${JAR_LIB_PATH:/Users/yuminghao/Downloads/verfiy/jar_lib}
+# 临时工作目录
+dex.compile.temp-dir=${DEX_TEMP_DIR:/tmp/dex-compile}
+# 编译超时时间（秒）
+dex.compile.timeout=60
+

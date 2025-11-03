@@ -14,6 +14,7 @@ const routes = [
   { path: '/hook-management', component: () => import('../views/HookManagementPage.vue'), meta: { requiresAuth: true } },
   { path: '/hook-edit', component: () => import('../views/HookEditPage.vue'), meta: { requiresAuth: true } },
   { path: '/hook-edit/:id', component: () => import('../views/HookEditPage.vue'), meta: { requiresAuth: true } },
+  { path: '/java-editor', component: () => import('../views/JavaEditorPage.vue'), meta: { requiresAuth: true } },
   { path: '/login', component: LoginPage },
   { path: '/register', component: RegisterPage },
 ]

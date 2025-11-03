@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xy.verfiy.mapper.DexCompileTaskMapper">
+
+    <resultMap id="DexCompileTaskResult" type="com.xy.verfiy.domain.DexCompileTask">
+        <id property="id" column="id" />
+        <result property="taskId" column="task_id" />
+        <result property="javaCode" column="java_code" />
+        <result property="dexFilePath" column="dex_file_path" />
+        <result property="compileLog" column="compile_log" />
+        <result property="success" column="success" />
+        <result property="downloaded" column="downloaded" />
+        <result property="createTime" column="create_time" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <insert id="insert" parameterType="com.xy.verfiy.domain.DexCompileTask" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO dex_compile_task (
+            task_id,
+            java_code,
+            dex_file_path,
+            compile_log,
+            success,
+            downloaded,
+            create_time,
+            update_time
+        ) VALUES (
+            #{taskId},
+            #{javaCode},
+            #{dexFilePath},
+            #{compileLog},
+            #{success},
+            #{downloaded},
+            NOW(),
+            NOW()
+        )
+    </insert>
+
+    <select id="findByTaskId" resultMap="DexCompileTaskResult">
+        SELECT *
+        FROM dex_compile_task
+        WHERE task_id = #{taskId}
+        LIMIT 1
+    </select>
+
+    <update id="updateDownloaded">
+        UPDATE dex_compile_task
+        SET downloaded = TRUE,
+            update_time = NOW()
+        WHERE task_id = #{taskId}
+    </update>
+
+    <delete id="deleteByTaskId">
+        DELETE FROM dex_compile_task
+        WHERE task_id = #{taskId}
+    </delete>
+
+</mapper>
+

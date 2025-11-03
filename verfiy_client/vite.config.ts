@@ -17,4 +17,21 @@ export default defineConfig({
       },
     },
   },
+  optimizeDeps: {
+    include: ['monaco-editor']
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('monaco-editor')) {
+              return 'monaco-editor'
+            }
+            return 'vendor'
+          }
+        }
+      }
+    }
+  }
 })

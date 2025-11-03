@@ -249,6 +249,15 @@ function toggleDexCache() {
   )
 }
 
+function goToJavaEditor() {
+  const currentHookId = hookId.value
+  if (currentHookId) {
+    router.push(`/java-editor?hookId=${currentHookId}`)
+  } else {
+    router.push('/java-editor')
+  }
+}
+
 async function handleDexFileChange(event: Event) {
   const target = event.target as HTMLInputElement
   if (target.files && target.files[0]) {
@@ -647,19 +656,31 @@ onUnmounted(() => {
             <h2 class="section-title">Dex 配置</h2>
             <p class="section-desc">上传 Dex 文件并配置调用信息</p>
           </div>
-          <button 
-            @click="toggleDexCache" 
-            class="btn-cache-toggle-large" 
-            :class="{ 'active': dexConfig.useLocalCache }"
-            :title="dexConfig.useLocalCache ? '已启用本地缓存' : '点击启用本地缓存'"
-          >
-            <svg viewBox="0 0 20 20" fill="currentColor">
-              <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z" />
-              <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z" />
-              <path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z" />
-            </svg>
-            <span>本地缓存</span>
-          </button>
+          <div style="display: flex; gap: 0.5rem;">
+            <button 
+              @click="toggleDexCache" 
+              class="btn-cache-toggle-large" 
+              :class="{ 'active': dexConfig.useLocalCache }"
+              :title="dexConfig.useLocalCache ? '已启用本地缓存' : '点击启用本地缓存'"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z" />
+                <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z" />
+                <path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z" />
+              </svg>
+              <span>本地缓存</span>
+            </button>
+            <button 
+              @click="goToJavaEditor" 
+              class="btn-cache-toggle-large" 
+              title="在线编写 Hook 代码"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+              </svg>
+              <span>在线写 Hook</span>
+            </button>
+          </div>
         </div>
         <div class="section-body">
           <div class="form-group">
@@ -1461,6 +1482,7 @@ onUnmounted(() => {
   width: 16px;
   height: 16px;
 }
+
 
 .btn-remove-hook {
   width: 32px;
