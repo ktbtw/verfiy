@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, toRaw, defineComponent, watch, h } from 'vue'
+import { ref, onMounted, onBeforeUnmount, toRaw, defineComponent, watch, h, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import http from '../utils/http'
 import * as monaco from 'monaco-editor'
@@ -42,6 +42,27 @@ const FileTreeNode = defineComponent({
     const emitSelect = (payload: FileNode) => emit('select', payload)
     const emitContextMenu = (event: MouseEvent, node: FileNode) => emit('contextmenu', event, node)
 
+    // 使用 computed 计算 active 状态
+    const isActive = computed(() => {
+      const active = props.node.type === 'file' && props.node.path === props.currentPath
+      console.log('[JavaEditor][FileTreeNode] computed isActive', {
+        nodePath: props.node.path,
+        currentPath: props.currentPath,
+        nodeType: props.node.type,
+        active
+      })
+      return active
+    })
+
+    // 监听 currentPath 变化
+    watch(() => props.currentPath, (newPath) => {
+      console.log('[JavaEditor][FileTreeNode] currentPath prop changed', {
+        nodePath: props.node.path,
+        newCurrentPath: newPath,
+        nodeType: props.node.type
+      })
+    })
+
     function handleClick() {
       console.log('[JavaEditor][FileTreeNode] handleClick', { path: props.node.path, type: props.node.type })
       if (props.node.type === 'folder') {
@@ -58,16 +79,20 @@ const FileTreeNode = defineComponent({
     }
 
     return () => {
-      console.log('[JavaEditor][FileTreeNode] render', {
-        path: props.node.path,
-        type: props.node.type,
-        children: props.node.children ? props.node.children.length : 0
-      })
-
       const isFolder = props.node.type === 'folder'
 
       const iconSvg = isFolder
-        ? h('svg', { viewBox: '0 0 20 20', fill: 'currentColor', class: 'icon' }, [
+        ? h('svg', { 
+            viewBox: '0 0 20 20', 
+            fill: 'currentColor', 
+            class: 'icon',
+            style: { 
+              width: '1rem', 
+              height: '1rem', 
+              flexShrink: '0',
+              color: '#f59e0b'
+            }
+          }, [
             props.node.expanded
               ? h('path', { d: 'M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z' })
               : h('path', {
@@ -76,7 +101,17 @@ const FileTreeNode = defineComponent({
                   'clip-rule': 'evenodd'
                 })
           ])
-        : h('svg', { viewBox: '0 0 20 20', fill: 'currentColor', class: 'icon' }, [
+        : h('svg', { 
+            viewBox: '0 0 20 20', 
+            fill: 'currentColor', 
+            class: 'icon',
+            style: { 
+              width: '1rem', 
+              height: '1rem', 
+              flexShrink: '0',
+              color: '#9ca3af'
+            }
+          }, [
             h('path', {
               'fill-rule': 'evenodd',
               d: 'M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z',
@@ -89,7 +124,7 @@ const FileTreeNode = defineComponent({
         {
           class: {
             'node-label': true,
-            active: props.node.type === 'file' && props.node.path === props.currentPath,
+            active: isActive.value,
             folder: props.node.type === 'folder'
           },
           style: { paddingLeft: `${props.depth * 16 + 8}px` },
@@ -101,10 +136,6 @@ const FileTreeNode = defineComponent({
 
       let childrenNodes: ReturnType<typeof h>[] = []
       if (isFolder && props.node.expanded && props.node.children) {
-        console.log('[JavaEditor][FileTreeNode] render children', {
-          path: props.node.path,
-          childrenCount: props.node.children.length
-        })
         childrenNodes = props.node.children.map(child =>
           h(FileTreeNode, {
             key: child.path,
@@ -195,6 +226,14 @@ const compileResult = ref<{
 const editorContainer = ref<HTMLElement | null>(null)
 let editor: monaco.editor.IStandaloneCodeEditor | null = null
 
+// 左侧面板宽度
+const panelWidth = ref(280)
+const isResizing = ref(false)
+const resizeStartX = ref(0)
+const resizeStartWidth = ref(0)
+const MIN_PANEL_WIDTH = 150
+const MAX_PANEL_WIDTH = 600
+
 // 右键菜单状态
 const contextMenu = ref({
   visible: false,
@@ -230,6 +269,47 @@ function showToast(message: string, type: 'success' | 'error' = 'success') {
   setTimeout(() => {
     toast.value.show = false
   }, 3000)
+}
+
+// ============= 面板调节大小 =============
+function startResize(event: MouseEvent) {
+  console.log('[JavaEditor] startResize', {
+    clientX: event.clientX,
+    currentWidth: panelWidth.value
+  })
+  isResizing.value = true
+  resizeStartX.value = event.clientX
+  resizeStartWidth.value = panelWidth.value
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+function handleMouseMove(event: MouseEvent) {
+  if (!isResizing.value) return
+  
+  event.preventDefault()
+  
+  // 计算鼠标移动的距离
+  const deltaX = event.clientX - resizeStartX.value
+  const newWidth = resizeStartWidth.value + deltaX
+  
+  // 限制宽度范围
+  if (newWidth >= MIN_PANEL_WIDTH && newWidth <= MAX_PANEL_WIDTH) {
+    panelWidth.value = newWidth
+  } else if (newWidth < MIN_PANEL_WIDTH) {
+    panelWidth.value = MIN_PANEL_WIDTH
+  } else if (newWidth > MAX_PANEL_WIDTH) {
+    panelWidth.value = MAX_PANEL_WIDTH
+  }
+}
+
+function stopResize() {
+  if (isResizing.value) {
+    console.log('[JavaEditor] stopResize', {
+      finalWidth: panelWidth.value
+    })
+    isResizing.value = false
+  }
 }
 
 // 递归查找节点
@@ -271,7 +351,12 @@ function toggleFolder(node: FileNode) {
 
 function selectFile(node: FileNode) {
   if (node.type === 'file') {
-    console.log('[JavaEditor] selectFile -> save previous file', currentFilePath.value)
+    console.log('[JavaEditor] selectFile CALLED', {
+      nodePath: node.path,
+      nodeType: node.type,
+      currentFilePath: currentFilePath.value
+    })
+    
     // 保存当前文件内容
     if (currentFilePath.value && editor) {
       console.log('[JavaEditor] selectFile -> storing content for', currentFilePath.value)
@@ -280,7 +365,8 @@ function selectFile(node: FileNode) {
     
     // 切换到新文件
     currentFilePath.value = node.path
-    console.log('[JavaEditor] selectFile -> new current file', currentFilePath.value)
+    console.log('[JavaEditor] selectFile -> UPDATED currentFilePath to', currentFilePath.value)
+    
     const content = fileContents.value.get(node.path) || node.content || ''
     if (editor) {
       console.log('[JavaEditor] selectFile -> setting editor content length', content.length)
@@ -288,6 +374,14 @@ function selectFile(node: FileNode) {
     }
   }
 }
+
+// Watch currentFilePath 变化
+watch(currentFilePath, (newPath, oldPath) => {
+  console.log('[JavaEditor] currentFilePath changed', {
+    from: oldPath,
+    to: newPath
+  })
+})
 
 function showContextMenu(event: MouseEvent, node: FileNode) {
   event.preventDefault()
@@ -334,41 +428,126 @@ function confirmNewItem() {
   console.log('[JavaEditor] confirmNewItem', { type, name, parentPath: parentNode?.path })
   if (!name || !parentNode) return
   
-  const fileName = type === 'file' && !name.endsWith('.java') ? `${name}.java` : name
-  const newPath = `${parentNode.path}/${fileName}`
-  console.log('[JavaEditor] confirmNewItem -> computed', { fileName, newPath })
+  // 支持多级路径创建，如 "com.xy.example" 或 "com.xy.example.Test.java"
+  const parts = name.split('.')
   
-  // 检查是否已存在
-  if (parentNode.children?.some(c => c.name === fileName)) {
-    showToast(`${type === 'file' ? '文件' : '包'}已存在`, 'error')
-    return
+  // 检查是否以 .java 结尾，确定最终是创建文件还是文件夹
+  const endsWithJava = name.endsWith('.java')
+  const isCreatingFile = type === 'file' || endsWithJava
+  
+  let currentParent = parentNode
+  let currentPath = parentNode.path
+  
+  // 如果是创建文件且有多级路径，或者是创建包且有多级
+  const shouldCreateNestedStructure = parts.length > 1
+  
+  if (shouldCreateNestedStructure) {
+    // 处理中间的包路径部分
+    const pathParts = isCreatingFile ? parts.slice(0, -1) : parts
+    
+    // 逐层创建文件夹
+    for (const part of pathParts) {
+      if (!part) continue
+      
+      // 查找或创建子文件夹
+      if (!currentParent.children) {
+        currentParent.children = []
+      }
+      
+      let childFolder = currentParent.children.find(c => c.name === part && c.type === 'folder')
+      
+      if (!childFolder) {
+        // 创建新文件夹
+        const folderPath = `${currentPath}/${part}`
+        childFolder = {
+          name: part,
+          type: 'folder',
+          path: folderPath,
+          expanded: true,
+          children: []
+        }
+        currentParent.children.push(childFolder)
+        console.log('[JavaEditor] confirmNewItem -> created folder', { name: part, path: folderPath })
+      }
+      
+      currentParent.expanded = true
+      currentParent = childFolder
+      currentPath = childFolder.path
+    }
   }
   
-  const newNode: FileNode = {
-    name: fileName,
-    type,
-    path: newPath,
-    ...(type === 'folder' ? { expanded: true, children: [] } : { content: generateClassTemplate(newPath, fileName) })
-  }
-  
-  if (!parentNode.children) {
-    parentNode.children = []
-  }
-  parentNode.children = [...parentNode.children, newNode]
-  console.log('[JavaEditor] confirmNewItem -> push child', { parentPath: parentNode.path, childrenCount: parentNode.children.length })
-  parentNode.expanded = true
-  
-  // 强制触发响应式更新
-  refreshFileTree()
-  console.log('[JavaEditor] confirmNewItem -> fileTree updated', JSON.parse(JSON.stringify(fileTree.value)))
-  
-  if (type === 'file') {
-    fileContents.value.set(newPath, newNode.content || '')
-    selectFile(newNode)
+  // 如果是创建文件，在最后一层创建文件
+  if (isCreatingFile) {
+    const lastPart = parts[parts.length - 1]
+    if (!lastPart) {
+      showToast('文件名不能为空', 'error')
+      return
+    }
+    
+    const fileName = lastPart.endsWith('.java') ? lastPart : `${lastPart}.java`
+    const filePath = `${currentPath}/${fileName}`
+    
+    // 检查文件是否已存在
+    if (currentParent.children?.some(c => c.name === fileName && c.type === 'file')) {
+      showToast('文件已存在', 'error')
+      refreshFileTree()
+      return
+    }
+    
+    const newFileNode: FileNode = {
+      name: fileName,
+      type: 'file',
+      path: filePath,
+      content: generateClassTemplate(filePath, fileName)
+    }
+    
+    if (!currentParent.children) {
+      currentParent.children = []
+    }
+    currentParent.children.push(newFileNode)
+    console.log('[JavaEditor] confirmNewItem -> created file', { name: fileName, path: filePath })
+    
+    // 强制触发响应式更新
+    refreshFileTree()
+    
+    // 打开新创建的文件
+    fileContents.value.set(filePath, newFileNode.content || '')
+    selectFile(newFileNode)
+    
+    showToast('类创建成功')
+  } else {
+    // 如果是单层创建文件夹
+    if (!shouldCreateNestedStructure) {
+      const folderName = name
+      const folderPath = `${currentPath}/${folderName}`
+      
+      // 检查是否已存在
+      if (currentParent.children?.some(c => c.name === folderName && c.type === 'folder')) {
+        showToast('包已存在', 'error')
+        return
+      }
+      
+      const newFolderNode: FileNode = {
+        name: folderName,
+        type: 'folder',
+        path: folderPath,
+        expanded: true,
+        children: []
+      }
+      
+      if (!currentParent.children) {
+        currentParent.children = []
+      }
+      currentParent.children.push(newFolderNode)
+      console.log('[JavaEditor] confirmNewItem -> created folder', { name: folderName, path: folderPath })
+    }
+    
+    // 强制触发响应式更新
+    refreshFileTree()
+    showToast('包创建成功')
   }
   
   newItemDialog.value.visible = false
-  showToast(`${type === 'file' ? '类' : '包'}创建成功`)
 }
 
 // 生成类模板
@@ -967,6 +1146,10 @@ onMounted(() => {
   
   // 点击其他地方关闭右键菜单
   document.addEventListener('click', hideContextMenu)
+  
+  // 添加拖动事件监听
+  document.addEventListener('mousemove', handleMouseMove)
+  document.addEventListener('mouseup', stopResize)
 })
 
 onBeforeUnmount(() => {
@@ -974,11 +1157,13 @@ onBeforeUnmount(() => {
     editor.dispose()
   }
   document.removeEventListener('click', hideContextMenu)
+  document.removeEventListener('mousemove', handleMouseMove)
+  document.removeEventListener('mouseup', stopResize)
 })
 </script>
 
 <template>
-  <div class="java-editor-page" @click="hideContextMenu">
+  <div class="java-editor-page" :class="{ resizing: isResizing }" @click="hideContextMenu">
     <!-- 头部 -->
     <div class="header">
       <button @click="goBack" class="btn-back">
@@ -1006,7 +1191,7 @@ onBeforeUnmount(() => {
     <!-- 主内容区 -->
     <div class="main-content">
       <!-- 文件树 -->
-      <div class="file-tree-panel">
+      <div class="file-tree-panel" :style="{ width: panelWidth + 'px' }">
         <div class="file-tree-header">
           <span>项目文件</span>
           <button @click="showNewFolderDialog(fileTree)" class="btn-new" title="新建包">
@@ -1021,7 +1206,6 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div class="file-tree">
-        {{ console.log('[JavaEditor] template render fileTree root', fileTree.children ? fileTree.children.length : 0) }}
           <FileTreeNode 
             :node="fileTree" 
             @toggle="toggleFolder"
@@ -1031,6 +1215,13 @@ onBeforeUnmount(() => {
           />
         </div>
       </div>
+
+      <!-- 拖动分隔条 -->
+      <div 
+        class="resize-handle" 
+        @mousedown="startResize"
+        :class="{ resizing: isResizing }"
+      ></div>
 
       <!-- 编辑器 -->
       <div class="editor-panel">
@@ -1082,10 +1273,13 @@ onBeforeUnmount(() => {
         <div class="dialog-body">
           <input 
             v-model="newItemDialog.name" 
-            :placeholder="newItemDialog.type === 'file' ? '输入类名（不含.java）' : '输入包名'"
+            :placeholder="newItemDialog.type === 'file' ? '输入类名或路径（如：Test 或 com.xy.Test.java）' : '输入包名（如：utils 或 com.xy.utils）'"
             @keyup.enter="confirmNewItem"
             autofocus
           />
+          <div class="dialog-hint">
+            {{ newItemDialog.type === 'file' ? '支持多级创建，如：com.xy.example.Test 会自动创建包结构' : '支持多级创建，如：com.xy.utils 会创建嵌套包' }}
+          </div>
         </div>
         <div class="dialog-footer">
           <button @click="newItemDialog.visible = false" class="btn-cancel">取消</button>
@@ -1128,6 +1322,20 @@ onBeforeUnmount(() => {
   background: #f5f5f5;
   display: flex;
   flex-direction: column;
+}
+
+.java-editor-page.resizing {
+  cursor: col-resize !important;
+}
+
+.java-editor-page.resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+  pointer-events: none;
+}
+
+.java-editor-page.resizing .resize-handle {
+  pointer-events: auto;
 }
 
 .header {
@@ -1218,12 +1426,13 @@ onBeforeUnmount(() => {
 }
 
 .file-tree-panel {
-  width: 220px;
-  min-width: 200px;
+  min-width: 150px;
+  max-width: 600px;
   background: white;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .file-tree-header {
@@ -1273,7 +1482,7 @@ onBeforeUnmount(() => {
   user-select: none;
 }
 
-.node-label {
+:deep(.node-label) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1281,28 +1490,62 @@ onBeforeUnmount(() => {
   cursor: pointer;
   font-size: 0.875rem;
   color: #374151;
-  transition: background 0.2s;
+  transition: all 0.15s;
+  position: relative;
 }
 
-.node-label:hover {
+:deep(.node-label:hover) {
   background: #f3f4f6;
 }
 
-.node-label.active {
+:deep(.node-label:active) {
   background: #e5e7eb;
-  color: #111827;
-  font-weight: 500;
 }
 
-.node-label .icon {
+:deep(.node-label.active) {
+  background: #dbeafe;
+  color: #1e40af;
+  font-weight: 600;
+  border-left: 3px solid #3b82f6;
+  padding-left: calc(0.5rem - 3px);
+}
+
+:deep(.node-label.active .icon) {
+  color: #3b82f6 !important;
+}
+
+:deep(.node-label .icon) {
   width: 1rem;
   height: 1rem;
   flex-shrink: 0;
   color: #9ca3af;
 }
 
-.node-label.folder .icon {
+:deep(.node-label.folder .icon) {
   color: #f59e0b;
+}
+
+.resize-handle {
+  width: 4px;
+  background: #e5e7eb;
+  cursor: col-resize;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.resize-handle:hover,
+.resize-handle.resizing {
+  background: #3b82f6;
+}
+
+.resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -2px;
+  right: -2px;
+  bottom: 0;
 }
 
 .editor-panel {
@@ -1467,10 +1710,18 @@ onBeforeUnmount(() => {
   font-size: 0.875rem;
   outline: none;
   transition: border-color 0.2s;
+  box-sizing: border-box;
 }
 
 .dialog-body input:focus {
   border-color: #3b82f6;
+}
+
+.dialog-hint {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  line-height: 1.4;
 }
 
 .dialog-footer {
