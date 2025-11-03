@@ -227,6 +227,7 @@ const compileResult = ref<{
 const editorContainer = ref<HTMLElement | null>(null)
 let editor: monaco.editor.IStandaloneCodeEditor | null = null
 let completionProvider: monaco.IDisposable | null = null
+let codeActionProvider: monaco.IDisposable | null = null
 
 // 左侧面板宽度
 const panelWidth = ref(280)
@@ -313,9 +314,102 @@ const toast = ref({
 // 自动保存相关
 const lastSaveTime = ref<string>('')
 const autoSaveTimer = ref<number | null>(null)
-const AUTOSAVE_INTERVAL = 2000 // 2秒
 const currentUserId = ref<string>('')
 const currentHookId = ref<string>('')
+
+// 自动导包相关
+const autoImportTimer = ref<number | null>(null)
+let AUTO_IMPORT_INTERVAL = 2000 // 2秒检测一次（可配置）
+
+// 编辑器设置
+const editorSettings = ref({
+  autoSaveInterval: 2, // 自动保存间隔（秒）
+  autoImportInterval: 2 // 自动导包间隔（秒）
+})
+const showSettingsDialog = ref(false)
+const SETTINGS_STORAGE_KEY = 'java-editor-settings'
+
+// 常见类的导入映射表（全局定义，供自动导包和快速修复使用）
+const importMap: Record<string, string> = {
+  // Xposed
+  'XC_MethodHook': 'import de.robv.android.xposed.XC_MethodHook;',
+  'XC_MethodReplacement': 'import de.robv.android.xposed.XC_MethodReplacement;',
+  'XposedHelpers': 'import de.robv.android.xposed.XposedHelpers;',
+  'XposedBridge': 'import de.robv.android.xposed.XposedBridge;',
+  'IXposedHookLoadPackage': 'import de.robv.android.xposed.IXposedHookLoadPackage;',
+  'XC_LoadPackage': 'import de.robv.android.xposed.callbacks.XC_LoadPackage;',
+  'MethodHookParam': 'import de.robv.android.xposed.XC_MethodHook.MethodHookParam;',
+  
+  // Android
+  'Context': 'import android.content.Context;',
+  'Activity': 'import android.app.Activity;',
+  'Intent': 'import android.content.Intent;',
+  'Bundle': 'import android.os.Bundle;',
+  'View': 'import android.view.View;',
+  'TextView': 'import android.widget.TextView;',
+  'Toast': 'import android.widget.Toast;',
+  'Log': 'import android.util.Log;',
+  'Handler': 'import android.os.Handler;',
+  'Looper': 'import android.os.Looper;',
+  'SharedPreferences': 'import android.content.SharedPreferences;',
+  'AlertDialog': 'import android.app.AlertDialog;',
+  'PackageManager': 'import android.content.pm.PackageManager;',
+  'ApplicationInfo': 'import android.content.pm.ApplicationInfo;',
+  
+  // Java 集合
+  'List': 'import java.util.List;',
+  'ArrayList': 'import java.util.ArrayList;',
+  'Map': 'import java.util.Map;',
+  'HashMap': 'import java.util.HashMap;',
+  'Set': 'import java.util.Set;',
+  'HashSet': 'import java.util.HashSet;',
+  'LinkedList': 'import java.util.LinkedList;',
+  'TreeMap': 'import java.util.TreeMap;',
+  'LinkedHashMap': 'import java.util.LinkedHashMap;',
+  'Collection': 'import java.util.Collection;',
+  'Collections': 'import java.util.Collections;',
+  'Arrays': 'import java.util.Arrays;',
+  'Iterator': 'import java.util.Iterator;',
+  
+  // Java 反射和类加载
+  'ClassLoader': 'import java.lang.ClassLoader;',
+  'Class': 'import java.lang.Class;',
+  'Method': 'import java.lang.reflect.Method;',
+  'Field': 'import java.lang.reflect.Field;',
+  'Constructor': 'import java.lang.reflect.Constructor;',
+  'InvocationTargetException': 'import java.lang.reflect.InvocationTargetException;',
+  'IllegalAccessException': 'import java.lang.IllegalAccessException;',
+  'NoSuchMethodException': 'import java.lang.NoSuchMethodException;',
+  'NoSuchFieldException': 'import java.lang.NoSuchFieldException;',
+  
+  // Java 日期时间
+  'Date': 'import java.util.Date;',
+  'SimpleDateFormat': 'import java.text.SimpleDateFormat;',
+  'Calendar': 'import java.util.Calendar;',
+  
+  // Java IO
+  'File': 'import java.io.File;',
+  'FileInputStream': 'import java.io.FileInputStream;',
+  'FileOutputStream': 'import java.io.FileOutputStream;',
+  'BufferedReader': 'import java.io.BufferedReader;',
+  'BufferedWriter': 'import java.io.BufferedWriter;',
+  'InputStreamReader': 'import java.io.InputStreamReader;',
+  'OutputStreamWriter': 'import java.io.OutputStreamWriter;',
+  'FileReader': 'import java.io.FileReader;',
+  'FileWriter': 'import java.io.FileWriter;',
+  'IOException': 'import java.io.IOException;',
+  'InputStream': 'import java.io.InputStream;',
+  'OutputStream': 'import java.io.OutputStream;',
+  
+  // Java 正则
+  'Pattern': 'import java.util.regex.Pattern;',
+  'Matcher': 'import java.util.regex.Matcher;',
+  
+  // Java 异常
+  'Exception': 'import java.lang.Exception;',
+  'RuntimeException': 'import java.lang.RuntimeException;',
+  'Throwable': 'import java.lang.Throwable;'
+}
 
 // 动态生成存储 key
 const getStorageKey = () => {
@@ -471,9 +565,155 @@ function triggerAutoSave() {
     clearTimeout(autoSaveTimer.value)
   }
   
+  const interval = editorSettings.value.autoSaveInterval * 1000
   autoSaveTimer.value = window.setTimeout(() => {
     saveToLocalStorage()
-  }, AUTOSAVE_INTERVAL)
+  }, interval)
+}
+
+// ============= 自动导包功能 =============
+// 查找合适的import插入位置
+function findImportInsertPosition(code: string) {
+  const lines = code.split('\n')
+  let packageLine = -1
+  let lastImportLine = -1
+  
+  // 查找package声明和最后一个import语句的位置
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]?.trim() || ''
+    if (line.startsWith('package ')) {
+      packageLine = i
+    } else if (line.startsWith('import ')) {
+      lastImportLine = i
+    }
+  }
+  
+  // 确定插入位置
+  if (lastImportLine !== -1) {
+    // 如果已有import，在最后一个import之后插入
+    return lastImportLine + 2 // +2 是因为行号从1开始，并且要在下一行
+  } else if (packageLine !== -1) {
+    // 如果有package声明但没有import，在package之后插入
+    return packageLine + 2
+  } else {
+    // 如果都没有，在第一行插入
+    return 1
+  }
+}
+
+// 自动检测并导入缺失的包
+function autoImportMissingPackages() {
+  if (!editor) return
+  
+  const model = editor.getModel()
+  if (!model) return
+  
+  const code = model.getValue()
+  
+  // 检测代码中使用的类名
+  const usedClasses = new Set<string>()
+  const classNameRegex = /\b([A-Z][a-zA-Z0-9_]*)\b/g
+  let match
+  while ((match = classNameRegex.exec(code)) !== null) {
+    if (match[1]) {
+      usedClasses.add(match[1])
+    }
+  }
+  
+  // 收集需要导入的类
+  const importsToAdd: string[] = []
+  usedClasses.forEach(className => {
+    const importStatement = importMap[className]
+    if (importStatement && !code.includes(importStatement)) {
+      importsToAdd.push(importStatement)
+    }
+  })
+  
+  // 如果有需要导入的类，自动添加
+  if (importsToAdd.length > 0) {
+    const insertLine = findImportInsertPosition(code)
+    const importsText = importsToAdd.join('\n') + '\n'
+    
+    // 使用 Monaco 的编辑操作
+    editor.executeEdits('auto-import', [{
+      range: new monaco.Range(insertLine, 1, insertLine, 1),
+      text: importsText
+    }])
+    
+    console.log(`[JavaEditor] 自动导入了 ${importsToAdd.length} 个包`)
+  }
+}
+
+// 启动自动导包定时器
+function startAutoImport() {
+  if (autoImportTimer.value) {
+    clearInterval(autoImportTimer.value)
+  }
+  
+  AUTO_IMPORT_INTERVAL = editorSettings.value.autoImportInterval * 1000
+  autoImportTimer.value = window.setInterval(() => {
+    autoImportMissingPackages()
+  }, AUTO_IMPORT_INTERVAL)
+}
+
+// 停止自动导包定时器
+function stopAutoImport() {
+  if (autoImportTimer.value) {
+    clearInterval(autoImportTimer.value)
+    autoImportTimer.value = null
+  }
+}
+
+// 重启自动导包定时器（设置更新时使用）
+function restartAutoImport() {
+  stopAutoImport()
+  startAutoImport()
+  console.log(`[JavaEditor] 自动导包间隔已更新为 ${editorSettings.value.autoImportInterval} 秒`)
+}
+
+// ============= 编辑器设置管理 =============
+// 加载设置
+function loadSettings() {
+  try {
+    const saved = localStorage.getItem(SETTINGS_STORAGE_KEY)
+    if (saved) {
+      const settings = JSON.parse(saved)
+      editorSettings.value = {
+        autoSaveInterval: settings.autoSaveInterval || 2,
+        autoImportInterval: settings.autoImportInterval || 2
+      }
+      console.log('[JavaEditor] 已加载设置:', editorSettings.value)
+    }
+  } catch (error) {
+    console.error('[JavaEditor] 加载设置失败:', error)
+  }
+}
+
+// 保存设置
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(editorSettings.value))
+    showToast('设置已保存', 'success')
+    console.log('[JavaEditor] 设置已保存:', editorSettings.value)
+    
+    // 重启自动导包定时器以应用新设置
+    restartAutoImport()
+    
+    showSettingsDialog.value = false
+  } catch (error) {
+    console.error('[JavaEditor] 保存设置失败:', error)
+    showToast('保存设置失败', 'error')
+  }
+}
+
+// 打开设置对话框
+function openSettings() {
+  showSettingsDialog.value = true
+}
+
+// 关闭设置对话框
+function closeSettings() {
+  showSettingsDialog.value = false
 }
 
 // ============= 面板调节大小 =============
@@ -1306,6 +1546,9 @@ function goBack() {
 
 // ============= Monaco Editor 初始化 =============
 onMounted(async () => {
+  // 加载编辑器设置
+  loadSettings()
+  
   // 初始化缓存标识（用户ID和Hook ID）
   initializeCacheIdentifiers()
   await fetchCurrentUser()
@@ -1719,10 +1962,69 @@ onMounted(async () => {
       }
     })
     
+    // 注册自动导包功能
+    if (codeActionProvider) {
+      codeActionProvider.dispose()
+    }
+    
+    // 注册快速修复提供器（手动触发的导入功能）
+    codeActionProvider = monaco.languages.registerCodeActionProvider('java', {
+      provideCodeActions: (model) => {
+        const actions: monaco.languages.CodeAction[] = []
+        
+        // 获取当前代码内容
+        const code = model.getValue()
+        
+        // 检测代码中使用的类名
+        const usedClasses = new Set<string>()
+        const classNameRegex = /\b([A-Z][a-zA-Z0-9_]*)\b/g
+        let match
+        while ((match = classNameRegex.exec(code)) !== null) {
+          if (match[1]) {
+            usedClasses.add(match[1])
+          }
+        }
+        
+        // 检查哪些类需要导入
+        usedClasses.forEach(className => {
+          const importStatement = importMap[className]
+          if (importStatement && !code.includes(importStatement)) {
+            const insertLine = findImportInsertPosition(code)
+            
+            // 创建添加导入的快速修复
+            actions.push({
+              title: `导入 ${className}`,
+              kind: 'quickfix',
+              edit: {
+                edits: [{
+                  resource: model.uri,
+                  versionId: model.getVersionId(),
+                  textEdit: {
+                    range: new monaco.Range(insertLine, 1, insertLine, 1),
+                    text: importStatement + '\n'
+                  }
+                }]
+              },
+              isPreferred: true
+            })
+          }
+        })
+        
+        return {
+          actions,
+          dispose: () => {}
+        }
+      }
+    })
+    
     // 监听编辑器内容变化，触发自动保存
     editor.onDidChangeModelContent(() => {
       triggerAutoSave()
     })
+    
+    // 启动自动导包定时器
+    startAutoImport()
+    console.log('[JavaEditor] 自动导包功能已启动，每2秒检测一次')
   }
   
   // 点击其他地方关闭右键菜单
@@ -1742,6 +2044,9 @@ onBeforeUnmount(() => {
     clearTimeout(autoSaveTimer.value)
   }
   
+  // 停止自动导包
+  stopAutoImport()
+  
   if (editor) {
     editor.dispose()
   }
@@ -1750,6 +2055,12 @@ onBeforeUnmount(() => {
   if (completionProvider) {
     completionProvider.dispose()
     completionProvider = null
+  }
+  
+  // 清理自动导包提供器
+  if (codeActionProvider) {
+    codeActionProvider.dispose()
+    codeActionProvider = null
   }
   
   document.removeEventListener('click', hideContextMenu)
@@ -1794,6 +2105,11 @@ onBeforeUnmount(() => {
         </button>
         <button @click="showTaskList" class="btn-tasks">
           任务
+        </button>
+        <button @click="openSettings" class="btn-settings" title="编辑器设置">
+          <svg viewBox="0 0 20 20" fill="currentColor" style="width: 1rem; height: 1rem;">
+            <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+          </svg>
         </button>
         <span class="quota-info" :title="userQuota.isAdmin ? '管理员无编译次数限制' : `每${userQuota.windowHours}小时最多编译${userQuota.limit}次`">
           剩余: {{ userQuota.isAdmin ? '∞' : userQuota.remaining }}/{{ userQuota.isAdmin ? '∞' : userQuota.limit }}
@@ -1977,6 +2293,55 @@ onBeforeUnmount(() => {
         <div class="dialog-footer">
           <button @click="downloadConfirmDialog.visible = false" class="btn-cancel">取消</button>
           <button @click="confirmDownload" class="btn-confirm">确认下载</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 编辑器设置对话框 -->
+    <div v-if="showSettingsDialog" class="dialog-overlay" @click="closeSettings">
+      <div class="dialog dialog-settings" @click.stop>
+        <div class="dialog-header">
+          <h3>编辑器设置</h3>
+          <button @click="closeSettings" class="btn-close">×</button>
+        </div>
+        <div class="dialog-body">
+          <div class="setting-group">
+            <label class="setting-label">
+              <span class="setting-name">自动保存间隔</span>
+              <span class="setting-desc">编辑器内容变化后，延迟保存到本地缓存的时间</span>
+            </label>
+            <div class="setting-input-group">
+              <input 
+                type="number" 
+                v-model.number="editorSettings.autoSaveInterval" 
+                min="1" 
+                max="60" 
+                class="setting-input"
+              />
+              <span class="setting-unit">秒</span>
+            </div>
+          </div>
+          
+          <div class="setting-group">
+            <label class="setting-label">
+              <span class="setting-name">自动导包间隔</span>
+              <span class="setting-desc">检测并自动导入缺失包的时间间隔</span>
+            </label>
+            <div class="setting-input-group">
+              <input 
+                type="number" 
+                v-model.number="editorSettings.autoImportInterval" 
+                min="1" 
+                max="60" 
+                class="setting-input"
+              />
+              <span class="setting-unit">秒</span>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button @click="closeSettings" class="btn-cancel">取消</button>
+          <button @click="saveSettings" class="btn-primary">保存</button>
         </div>
       </div>
     </div>
@@ -2208,7 +2573,7 @@ onBeforeUnmount(() => {
   gap: 0.5rem;
 }
 
-.btn-compile, .btn-download, .btn-tasks {
+.btn-compile, .btn-download, .btn-tasks, .btn-settings {
   padding: 0.5rem 1.5rem;
   border: none;
   border-radius: 6px;
@@ -2253,6 +2618,16 @@ onBeforeUnmount(() => {
 
 .btn-tasks:hover {
   background: #2563eb;
+}
+
+.btn-settings {
+  background: #6b7280;
+  color: white;
+  padding: 0.5rem 0.75rem;
+}
+
+.btn-settings:hover {
+  background: #4b5563;
 }
 
 .quota-info {
@@ -2692,6 +3067,64 @@ onBeforeUnmount(() => {
 }
 
 /* 任务列表对话框 */
+.dialog-settings {
+  width: 500px;
+  max-width: 90vw;
+}
+
+.setting-group {
+  margin-bottom: 1.5rem;
+}
+
+.setting-group:last-child {
+  margin-bottom: 0;
+}
+
+.setting-label {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.75rem;
+}
+
+.setting-name {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #111827;
+  margin-bottom: 0.25rem;
+}
+
+.setting-desc {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.setting-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.setting-input {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.setting-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.setting-unit {
+  font-size: 0.875rem;
+  color: #6b7280;
+  min-width: 2rem;
+}
+
 .dialog-tasks {
   width: 600px;
   max-height: 80vh;
