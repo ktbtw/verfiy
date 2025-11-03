@@ -180,11 +180,178 @@ const FileTreeNode = defineComponent({
 
 // ============= 状态管理 =============
 const fileTree = ref<FileNode>({
-  name: 'src',
+  name: 'root',
   type: 'folder',
-  path: 'src',
+  path: '',
   expanded: true,
   children: [
+    {
+      name: '依赖说明.txt',
+      type: 'file',
+      path: '依赖说明.txt',
+      protected: true,
+      content: `==========================================
+  Java Hook 编辑器 - 可用依赖说明
+==========================================
+
+本编辑器已内置以下 JAR 依赖，可直接在代码中使用：
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【1】Android SDK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+文件名：android.jar (26MB)
+说明：Android 平台 API，包含所有 Android 系统类
+常用包：
+  • android.content.Context
+  • android.app.Activity
+  • android.widget.*
+  • android.view.*
+  • android.os.*
+
+示例：
+  import android.content.Context;
+  import android.widget.Toast;
+  
+  Toast.makeText(context, "Hello", Toast.LENGTH_SHORT).show();
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【2】Xposed API
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+文件名：XposedBridgeApi-82.jar (28KB)
+说明：Xposed Hook 框架 API
+常用类：
+  • de.robv.android.xposed.XC_MethodHook
+  • de.robv.android.xposed.XposedHelpers
+  • de.robv.android.xposed.XposedBridge
+
+示例：
+  import de.robv.android.xposed.XC_MethodHook;
+  import de.robv.android.xposed.XposedHelpers;
+  
+  XposedHelpers.findAndHookMethod(
+      "com.example.MyClass",
+      classLoader,
+      "methodName",
+      new XC_MethodHook() {
+          @Override
+          protected void beforeHookedMethod(MethodHookParam param) {
+              // Hook 逻辑
+          }
+      }
+  );
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【3】Apache Commons IO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+文件名：commons-io-2.6.jar (260KB)
+说明：文件和 IO 操作工具库
+常用类：
+  • org.apache.commons.io.FileUtils
+  • org.apache.commons.io.IOUtils
+
+示例：
+  import org.apache.commons.io.FileUtils;
+  
+  String content = FileUtils.readFileToString(file, "UTF-8");
+  FileUtils.writeStringToFile(file, content, "UTF-8");
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【4】Fastjson
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+文件名：fastjson-1.2.76.jar (648KB)
+说明：高性能 JSON 处理库
+常用类：
+  • com.alibaba.fastjson.JSON
+  • com.alibaba.fastjson.JSONObject
+  • com.alibaba.fastjson.JSONArray
+
+示例：
+  import com.alibaba.fastjson.JSON;
+  import com.alibaba.fastjson.JSONObject;
+  
+  // 对象转 JSON
+  String json = JSON.toJSONString(obj);
+  
+  // JSON 转对象
+  MyClass obj = JSON.parseObject(json, MyClass.class);
+  
+  // 使用 JSONObject
+  JSONObject jsonObj = new JSONObject();
+  jsonObj.put("key", "value");
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【5】BouncyCastle 加密库
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+文件名：bcprov-jdk16-1.46.jar (2.0MB)
+说明：强大的加密、解密、签名库
+常用包：
+  • org.bouncycastle.jce.provider.BouncyCastleProvider
+  • org.bouncycastle.crypto.*
+
+示例：
+  import org.bouncycastle.jce.provider.BouncyCastleProvider;
+  import java.security.Security;
+  
+  Security.addProvider(new BouncyCastleProvider());
+  // 使用 AES、RSA 等加密算法
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【6】HookHelper 工具类（内置）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+包名：com.xy.ithook.Util.HookHelper
+说明：内置工具类，提供常用的 Hook 辅助方法
+注意：此类不会被编译到 Dex 文件中
+
+常用方法：
+  • HookHelper.getHostClassLoader()    - 获取目标应用类加载器
+  • HookHelper.getHostContext()        - 获取目标应用上下文
+  • HookHelper.getAndroidId()          - 获取设备 Android ID
+  • HookHelper.getModuleContext()      - 获取模块上下文
+  • HookHelper.getPackageName()        - 获取目标应用包名
+
+示例：
+  import com.xy.ithook.Util.HookHelper;
+  
+  ClassLoader cl = HookHelper.getHostClassLoader();
+  Context ctx = HookHelper.getHostContext();
+  String androidId = HookHelper.getAndroidId();
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 使用提示
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 自动导包功能
+   编辑器会自动识别类名并导入对应的包，无需手动添加 import
+
+2. 代码补全
+   输入类名或方法名时，会自动提示可用的 API
+
+3. 添加新依赖
+   目前无法实现，可以在复制HookHelper到自己的项目，编译成dex后在去掉。
+
+4. 编译优化
+   HookHelper 工具类只在编译时可用，不会打包到最终的 Dex 文件中
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 更多信息
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- Xposed 官方文档：https://api.xposed.info/
+- Android API 文档：https://developer.android.com/
+- Fastjson 文档：https://github.com/alibaba/fastjson
+- Commons IO 文档：https://commons.apache.org/proper/commons-io/
+
+==========================================
+  祝您 Hook 开发愉快！🎉
+==========================================
+`
+    },
+    {
+      name: 'src',
+      type: 'folder',
+      path: 'src',
+      expanded: true,
+      children: [
     {
       name: 'com',
       type: 'folder',
@@ -319,12 +486,14 @@ public class MyHook {
               type: 'folder',
               path: 'src/com/xy/ithook',
               expanded: false,
+              protected: true,
               children: [
                 {
                   name: 'Util',
                   type: 'folder',
                   path: 'src/com/xy/ithook/Util',
                   expanded: false,
+                  protected: true,
                   children: [
                     {
                       name: 'HookHelper.java',
@@ -479,6 +648,8 @@ public class HookHelper {
         }
       ]
     }
+    ]
+  }
   ]
 })
 
@@ -490,7 +661,7 @@ watch(
   { deep: true }
 )
 
-const currentFilePath = ref<string>('src/com/example/MyHook.java')
+const currentFilePath = ref<string>('依赖说明.txt')
 const fileContents = ref<Map<string, string>>(new Map())
 const compiling = ref(false)
 const downloadDisabled = ref(false)
@@ -1040,6 +1211,11 @@ function stopResize() {
   }
 }
 
+// 获取 src 节点
+function getSrcNode(): FileNode | null {
+  return findNode(fileTree.value, 'src')
+}
+
 // 递归查找节点
 function findNode(tree: FileNode, path: string): FileNode | null {
   if (tree.path === path) return tree
@@ -1055,13 +1231,16 @@ function findNode(tree: FileNode, path: string): FileNode | null {
 // 递归收集所有文件
 function collectAllFiles(node: FileNode, files: Map<string, string> = new Map()): Map<string, string> {
   if (node.type === 'file') {
-    // 去掉 src/ 前缀，只保留包路径
-    const relativePath = node.path.replace(/^src\//, '')
-    // 受保护的文件使用原始内容，非受保护的文件从 fileContents 读取
-    const content = node.protected 
-      ? (node.content || '')
-      : (fileContents.value.get(node.path) || node.content || '')
-    files.set(relativePath, content)
+    // 只收集 src 目录下的文件，排除根目录的其他文件（如依赖说明.txt）
+    if (node.path.startsWith('src/')) {
+      // 去掉 src/ 前缀，只保留包路径
+      const relativePath = node.path.replace(/^src\//, '')
+      // 受保护的文件使用原始内容，非受保护的文件从 fileContents 读取
+      const content = node.protected 
+        ? (node.content || '')
+        : (fileContents.value.get(node.path) || node.content || '')
+      files.set(relativePath, content)
+    }
   } else if (node.children) {
     node.children.forEach(child => collectAllFiles(child, files))
   }
@@ -1165,6 +1344,12 @@ function confirmNewItem() {
   console.log('[JavaEditor] confirmNewItem', { type, name, parentPath: parentNode?.path })
   if (!name || !parentNode) return
   
+  // 检查是否在受保护的包路径下创建
+  if (parentNode.path.includes('com/xy/ithook')) {
+    showToast('不能在 com.xy.ithook 包下创建文件或目录', 'error')
+    return
+  }
+  
   // 检查是否以 .java 结尾，确定最终是创建文件还是文件夹
   const endsWithJava = name.endsWith('.java')
   const isCreatingFile = type === 'file' || endsWithJava
@@ -1172,6 +1357,13 @@ function confirmNewItem() {
   // 如果以 .java 结尾，先去掉后缀再分割，避免把 .java 当成路径的一部分
   const nameWithoutJava = endsWithJava ? name.slice(0, -5) : name
   const parts = nameWithoutJava.split('.')
+  
+  // 检查完整路径是否包含受保护的包（防止用户输入 com.xy.ithook.xxx）
+  const fullPath = `${parentNode.path}/${parts.join('/')}`
+  if (fullPath.includes('com/xy/ithook')) {
+    showToast('不能创建 com.xy.ithook 包下的类或包', 'error')
+    return
+  }
   
   console.log('[JavaEditor] confirmNewItem -> parsed', { 
     isCreatingFile, 
@@ -1852,9 +2044,15 @@ onMounted(async () => {
   
   // 如果没有缓存，加载初始文件
   if (!loadedFromCache) {
-  const initialFile = findNode(fileTree.value, currentFilePath.value)
-  if (initialFile && initialFile.type === 'file') {
-    fileContents.value.set(initialFile.path, initialFile.content || '')
+    const initialFile = findNode(fileTree.value, currentFilePath.value)
+    if (initialFile && initialFile.type === 'file') {
+      fileContents.value.set(initialFile.path, initialFile.content || '')
+    }
+  } else {
+    // 即使加载了缓存，也要确保受保护的文件内容是最新的
+    const dependencyFile = findNode(fileTree.value, '依赖说明.txt')
+    if (dependencyFile && dependencyFile.type === 'file') {
+      fileContents.value.set(dependencyFile.path, dependencyFile.content || '')
     }
   }
   
@@ -2468,25 +2666,30 @@ onBeforeUnmount(() => {
       <div class="file-tree-panel" :style="{ width: panelWidth + 'px' }">
         <div class="file-tree-header">
           <span>项目文件</span>
-          <button @click="showNewFolderDialog(fileTree)" class="btn-new" title="新建包">
+          <button @click="() => { const node = getSrcNode(); if (node) showNewFolderDialog(node); }" class="btn-new" title="新建包">
             <svg viewBox="0 0 20 20" fill="currentColor">
               <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
             </svg>
           </button>
-          <button @click="showNewFileDialog(fileTree)" class="btn-new" title="新建类">
+          <button @click="() => { const node = getSrcNode(); if (node) showNewFileDialog(node); }" class="btn-new" title="新建类">
             <svg viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
             </svg>
           </button>
         </div>
         <div class="file-tree">
-          <FileTreeNode 
-            :node="fileTree" 
-            @toggle="toggleFolder"
-            @select="selectFile"
-            @contextmenu="showContextMenu"
-            :currentPath="currentFilePath"
-          />
+          <!-- 渲染所有根节点的子节点 -->
+          <template v-if="fileTree.children">
+            <FileTreeNode 
+              v-for="child in fileTree.children" 
+              :key="child.path"
+              :node="child" 
+              @toggle="toggleFolder"
+              @select="selectFile"
+              @contextmenu="showContextMenu"
+              :currentPath="currentFilePath"
+            />
+          </template>
         </div>
       </div>
 
@@ -2529,23 +2732,28 @@ onBeforeUnmount(() => {
       :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
       @click.stop
     >
-      <div v-if="contextMenu.node.type === 'folder'" class="menu-item" @click="showNewFolderDialog(contextMenu.node)">
+      <!-- 正常的文件夹操作 -->
+      <div v-if="contextMenu.node.type === 'folder' && !contextMenu.node.protected && !contextMenu.node.path.includes('com/xy/ithook')" class="menu-item" @click="showNewFolderDialog(contextMenu.node)">
         新建包
       </div>
-      <div v-if="contextMenu.node.type === 'folder'" class="menu-item" @click="showNewFileDialog(contextMenu.node)">
+      <div v-if="contextMenu.node.type === 'folder' && !contextMenu.node.protected && !contextMenu.node.path.includes('com/xy/ithook')" class="menu-item" @click="showNewFileDialog(contextMenu.node)">
         新建类
       </div>
+      
+      <!-- 重命名和删除（非受保护的） -->
       <div v-if="!contextMenu.node.protected" class="menu-item" @click="showRenameDialog(contextMenu.node)">
         重命名
       </div>
       <div v-if="contextMenu.node.path !== 'src' && !contextMenu.node.protected" class="menu-item danger" @click="showDeleteDialog(contextMenu.node)">
         删除
       </div>
+      
+      <!-- 受保护的提示 -->
       <div v-if="contextMenu.node.protected" class="menu-item disabled">
         <svg viewBox="0 0 20 20" fill="currentColor" style="width: 14px; height: 14px; margin-right: 6px;">
           <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
         </svg>
-        受保护的文件
+        {{ contextMenu.node.type === 'folder' ? '受保护的包（不可修改）' : '受保护的文件' }}
       </div>
     </div>
 

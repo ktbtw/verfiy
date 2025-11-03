@@ -61,3 +61,5 @@ deploy.sh
 Hook_Internet/
 
 build.sh
+
+jar_lib/
