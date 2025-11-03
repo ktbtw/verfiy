@@ -2065,13 +2065,21 @@ onMounted(async () => {
   if (initialFile && initialFile.type === 'file') {
     fileContents.value.set(initialFile.path, initialFile.content || '')
     }
-  } else {
-    // 即使加载了缓存，也要确保受保护的文件内容是最新的
-    const dependencyFile = findNode(fileTree.value, '依赖说明.txt')
-    if (dependencyFile && dependencyFile.type === 'file') {
-      fileContents.value.set(dependencyFile.path, dependencyFile.content || '')
-    }
   }
+  
+  // 无论是否加载了缓存，都要确保受保护的文件内容使用初始值，不使用缓存
+  const protectedFiles = [
+    '依赖说明.txt',
+    'src/com/xy/ithook/Util/HookHelper.java'
+  ]
+  
+  protectedFiles.forEach(filePath => {
+    const protectedFile = findNode(fileTree.value, filePath)
+    if (protectedFile && protectedFile.type === 'file' && protectedFile.content) {
+      fileContents.value.set(protectedFile.path, protectedFile.content)
+      console.log(`[JavaEditor] 强制使用初始内容: ${filePath}`)
+    }
+  })
   
   // 查询服务器上未下载的编译任务（即使本地有缓存也要查询，以防用户在其他设备编译）
   checkUndownloadedTasks()
