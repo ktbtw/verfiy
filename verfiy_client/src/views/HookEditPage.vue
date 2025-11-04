@@ -21,6 +21,9 @@ const form = ref({
   requireCardVerification: false
 })
 
+// 记录原始的 zip 版本号，用于检测是否需要提醒用户更新版本号
+const originalZipVersion = ref(0)
+
 // Hook 配置列表
 type HookItem = {
   id: number
@@ -81,6 +84,33 @@ const toast = ref({
   type: 'success' as 'success' | 'error'
 })
 
+// 自定义确认对话框
+const confirmDialog = ref({
+  show: false,
+  title: '',
+  message: '',
+  onConfirm: null as (() => void) | null,
+  onCancel: null as (() => void) | null
+})
+
+function showConfirmDialog(title: string, message: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    confirmDialog.value = {
+      show: true,
+      title,
+      message,
+      onConfirm: () => {
+        confirmDialog.value.show = false
+        resolve(true)
+      },
+      onCancel: () => {
+        confirmDialog.value.show = false
+        resolve(false)
+      }
+    }
+  })
+}
+
 async function loadAppInfo() {
   try {
     const { data } = await http.get('/admin/apps/api/current-app')
@@ -104,6 +134,9 @@ async function loadHookInfo() {
       form.value.enabled = data.enabled
       form.value.zipVersion = data.zipVersion || 0
       form.value.requireCardVerification = Boolean(data.requireCardVerification)
+      
+      // 保存原始的 zip 版本号
+      originalZipVersion.value = data.zipVersion || 0
       
       // 解析 Hook 数据
       if (data.data) {
@@ -371,9 +404,20 @@ async function saveHook() {
     return
   }
   
+  // 检查是否上传了新的 zip 文件但版本号没有改变
+  if (zipFile.value && form.value.zipVersion === originalZipVersion.value) {
+    const shouldContinue = await showConfirmDialog(
+      '资源版本号提醒',
+      `检测到您上传了新的资源文件，但版本号仍为 ${form.value.zipVersion}。\n\n客户端会根据版本号判断是否需要更新资源。建议修改资源版本号，否则客户端可能不会更新资源。\n\n是否继续保存而不修改版本号？`
+    )
+    if (!shouldContinue) {
+      return
+    }
+  }
+  
   saving.value = true
   try {
-    // 构建符合客户端格式的 Hook 数据
+    // 构建符合客户端格式的 Hook 数据（不包含文件内容）
     const hookData: any = {
       data: hookItems.value.map(item => ({
         ClassName: item.className,
@@ -391,28 +435,13 @@ async function saveHook() {
       }))
     }
     
-    // 添加 Dex 配置
+    // 添加 Dex 配置信息（不包含文件）
     if (dexConfig.value.dexClassName || dexConfig.value.dexMethodName) {
       hookData.dexData = {
         DexClassName: dexConfig.value.dexClassName,
         DexMethodName: dexConfig.value.dexMethodName,
         DexMethodParamTypes: [], // Dex 方法不需要参数
         UseLocalCache: dexConfig.value.useLocalCache
-      }
-      
-      // 如果上传了 Dex 文件，添加 dexBytes
-      if (dexFile.value) {
-        const dexBase64 = await fileToBase64(dexFile.value)
-        hookData.dexData.dexBytes = dexBase64
-      }
-    }
-    
-    // 添加 Zip 配置
-    if (zipFile.value) {
-      const zipBase64 = await fileToBase64(zipFile.value)
-      hookData.zipData = {
-        zipBytes: zipBase64,
-        zipVersion: form.value.zipVersion
       }
     }
     
@@ -425,6 +454,18 @@ async function saveHook() {
       requireCardVerification: form.value.requireCardVerification,
       zipVersion: form.value.zipVersion,
       data: JSON.stringify(hookData)
+    }
+    
+    // Dex 文件直接作为 dexData 字段（Base64 字符串）
+    if (dexFile.value) {
+      const dexBase64 = await fileToBase64(dexFile.value)
+      payload.dexData = dexBase64
+    }
+    
+    // Zip 文件直接作为 zipData 字段（Base64 字符串）
+    if (zipFile.value) {
+      const zipBase64 = await fileToBase64(zipFile.value)
+      payload.zipData = zipBase64
     }
     
     await http.post('/admin/hook-info', payload)
@@ -844,6 +885,15 @@ onUnmounted(() => {
               Dex 方法必须是无参数的静态方法
             </div>
           </div>
+          
+          <div class="form-group">
+            <div class="dex-timing-notice">
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+              </svg>
+              如果你想要更早的执行时机，请开启本地缓存
+            </div>
+          </div>
         </div>
       </div>
       
@@ -938,6 +988,35 @@ onUnmounted(() => {
             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
           </svg>
           <span>{{ toast.message }}</span>
+        </div>
+      </transition>
+    </teleport>
+
+    <!-- 自定义确认对话框 -->
+    <teleport to="body">
+      <transition name="dialog-fade">
+        <div v-if="confirmDialog.show" class="dialog-overlay" @click="confirmDialog.onCancel?.()">
+          <div class="dialog-container" @click.stop>
+            <div class="dialog-header">
+              <div class="dialog-icon">
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                </svg>
+              </div>
+              <h3 class="dialog-title">{{ confirmDialog.title }}</h3>
+            </div>
+            <div class="dialog-body">
+              <p class="dialog-message">{{ confirmDialog.message }}</p>
+            </div>
+            <div class="dialog-footer">
+              <button @click="confirmDialog.onCancel?.()" class="dialog-btn dialog-btn-cancel">
+                取消
+              </button>
+              <button @click="confirmDialog.onConfirm?.()" class="dialog-btn dialog-btn-confirm">
+                继续保存
+              </button>
+            </div>
+          </div>
         </div>
       </transition>
     </teleport>
@@ -1488,6 +1567,148 @@ onUnmounted(() => {
   transform: translateX(-50%) translateY(-10px);
 }
 
+/* 自定义确认对话框 */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  padding: 20px;
+}
+
+.dialog-container {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 480px;
+  width: 100%;
+  overflow: hidden;
+  animation: dialog-bounce 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes dialog-bounce {
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 24px 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.dialog-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(251, 191, 36, 0.1));
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.dialog-icon svg {
+  width: 28px;
+  height: 28px;
+  color: #f59e0b;
+}
+
+.dialog-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin: 0;
+  flex: 1;
+}
+
+.dialog-body {
+  padding: 20px 24px;
+}
+
+.dialog-message {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-2);
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.dialog-footer {
+  display: flex;
+  gap: 12px;
+  padding: 20px 24px 24px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.dialog-btn {
+  flex: 1;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  outline: none;
+}
+
+.dialog-btn-cancel {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-1);
+}
+
+.dialog-btn-cancel:hover {
+  background: rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.dialog-btn-confirm {
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  color: white;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.dialog-btn-confirm:hover {
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
+  transform: translateY(-1px);
+}
+
+.dialog-btn-confirm:active,
+.dialog-btn-cancel:active {
+  transform: translateY(0);
+}
+
+.dialog-fade-enter-active,
+.dialog-fade-leave-active {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dialog-fade-enter-from,
+.dialog-fade-leave-to {
+  opacity: 0;
+}
+
+.dialog-fade-enter-from .dialog-container,
+.dialog-fade-leave-to .dialog-container {
+  transform: scale(0.9);
+}
+
 /* 参数列表动画 */
 .param-list-enter-active,
 .param-list-leave-active {
@@ -2021,6 +2242,25 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.dex-timing-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 8px;
+  color: #059669;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dex-timing-notice svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
 /* 类型助手样式 */
 .type-helper-wrapper {
   position: relative;
@@ -2307,6 +2547,59 @@ onUnmounted(() => {
     background: rgba(59, 130, 246, 0.15);
     border-color: rgba(59, 130, 246, 0.4);
     color: #60a5fa;
+  }
+  
+  .dex-timing-notice {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #34d399;
+  }
+  
+  /* 对话框暗色主题 */
+  .dialog-overlay {
+    background: rgba(0, 0, 0, 0.7);
+  }
+  
+  .dialog-container {
+    background: rgba(22, 22, 26, 0.98);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  }
+  
+  .dialog-header {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+  
+  .dialog-icon {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(251, 191, 36, 0.15));
+  }
+  
+  .dialog-icon svg {
+    color: #fbbf24;
+  }
+  
+  .dialog-title {
+    color: var(--text-1-dark);
+  }
+  
+  .dialog-message {
+    color: var(--text-2-dark);
+  }
+  
+  .dialog-footer {
+    border-top-color: rgba(255, 255, 255, 0.08);
+  }
+  
+  .dialog-btn-cancel {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-1-dark);
+  }
+  
+  .dialog-btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  
+  .dialog-btn-confirm {
+    background: linear-gradient(135deg, #fbbf24, #fb923c);
   }
 }
 </style>

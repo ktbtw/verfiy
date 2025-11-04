@@ -2,11 +2,13 @@ package com.xy.verfiy.controller;
 
 import com.xy.verfiy.domain.HookInfo;
 import com.xy.verfiy.service.HookInfoService;
+import com.xy.verfiy.service.FileStorageService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -20,11 +22,13 @@ import org.springframework.web.server.ResponseStatusException;
 public class HookInfoController {
 
     private final HookInfoService hookInfoService;
+    private final FileStorageService fileStorageService;
     private static final long MAX_DEX_SIZE_BYTES = 6L * 1024 * 1024;  // 6 MB
     private static final long MAX_ZIP_SIZE_BYTES = 10L * 1024 * 1024; // 10 MB
 
-    public HookInfoController(HookInfoService hookInfoService) {
+    public HookInfoController(HookInfoService hookInfoService, FileStorageService fileStorageService) {
         this.hookInfoService = hookInfoService;
+        this.fileStorageService = fileStorageService;
     }
 
     @GetMapping
@@ -89,7 +93,27 @@ public class HookInfoController {
                 }
                 payload.setAppId(sessionApp);
             }
+            
+            // 验证 Base64 数据大小
             validateBinarySize(payload);
+            
+            // 处理 Dex 文件：Base64 → 文件 → 路径
+            String dexBase64 = payload.getDexData();
+            if (dexBase64 != null && !dexBase64.isBlank()) {
+                byte[] dexBytes = Base64.getDecoder().decode(dexBase64.replaceAll("\\s", ""));
+                String dexPath = fileStorageService.saveDexFile(dexBytes);
+                payload.setDexData(dexPath); // 存储文件路径而非 Base64
+            }
+            
+            // 处理 Zip 文件：Base64 → 文件 → 路径
+            String zipBase64 = payload.getZipData();
+            if (zipBase64 != null && !zipBase64.isBlank()) {
+                byte[] zipBytes = Base64.getDecoder().decode(zipBase64.replaceAll("\\s", ""));
+                int zipVersion = payload.getZipVersion() != null ? payload.getZipVersion() : 0;
+                String zipPath = fileStorageService.saveZipFile(zipBytes, zipVersion);
+                payload.setZipData(zipPath); // 存储文件路径而非 Base64
+            }
+            
             String owner = requireOwner(authentication);
             HookInfo saved = hookInfoService.saveOrUpdate(payload, owner);
             result.put("success", true);
@@ -99,6 +123,10 @@ public class HookInfoController {
             result.put("success", false);
             result.put("message", ex.getMessage());
             return ResponseEntity.badRequest().body(result);
+        } catch (IOException ex) {
+            result.put("success", false);
+            result.put("message", "文件保存失败: " + ex.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
     }
 
@@ -129,11 +157,34 @@ public class HookInfoController {
         Map<String, Object> result = new HashMap<>();
         try {
             String owner = requireOwner(authentication);
-            boolean ok = hookInfoService.delete(id, owner);
-            result.put("success", ok);
-            if (!ok) {
+            
+            // 删除前先获取 HookInfo，以便删除关联的文件
+            HookInfo info = hookInfoService.getById(id, owner);
+            if (info == null) {
+                result.put("success", false);
                 result.put("message", "未找到 HookInfo");
                 return ResponseEntity.status(404).body(result);
+            }
+            
+            // 删除数据库记录
+            boolean ok = hookInfoService.delete(id, owner);
+            
+            if (ok) {
+                // 删除成功后，清理关联的文件
+                // 注意：由于文件可能被多个 HookInfo 引用（内容相同时），暂不删除物理文件
+                // 后续可以实现定期清理孤儿文件的任务
+                // if (info.getDexData() != null) {
+                //     fileStorageService.deleteDexFile(info.getDexData());
+                // }
+                // if (info.getZipData() != null) {
+                //     fileStorageService.deleteZipFile(info.getZipData());
+                // }
+            }
+            
+            result.put("success", ok);
+            if (!ok) {
+                result.put("message", "删除失败");
+                return ResponseEntity.status(500).body(result);
             }
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException ex) {

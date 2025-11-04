@@ -518,7 +518,7 @@ import android.text.TextUtils;
 import android.app.Activity;
 import java.lang.ref.WeakReference;
 import java.util.UUID;
-
+import java.io.File;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 
@@ -529,6 +529,7 @@ public class HookHelper {
     private static WeakReference<Context> moduleContextRef;
     private static WeakReference<Context> hostContextRef;
     private static String versionName;
+    private static File resHook;
     private static int versionCode;
     private static XC_LoadPackage.LoadPackageParam loadPackageParam;
     private static XModuleResources moduleResources;
@@ -622,8 +623,12 @@ public class HookHelper {
         HookHelper.modulePath = modulePath;
     }
 
-
-
+    public static File getResFile(){
+        if(resHook==null){
+            return new File(getHostContext().getFilesDir(), "resHook.zip");
+        }
+        return resHook;
+    }
 
     public static void setModuleContext(Context moduleContext) {
         moduleContextRef = moduleContext == null ? null : new WeakReference<>(moduleContext);
