@@ -316,7 +316,7 @@ Getter 方法（常用）：
   • HookHelper.getModulePath()         - 获取模块路径
   • HookHelper.getCurrentlyActivity()  - 获取当前 Activity
 示例：
-  import com.xy.ithook.HookHelper;
+  import com.xy.ithook.Util.HookHelper;
   
   // 获取常用对象
   ClassLoader cl = HookHelper.getHostClassLoader();
@@ -380,7 +380,7 @@ Getter 方法（常用）：
 
 import android.content.Context;
 import android.widget.Toast;
-import com.xy.ithook.HookHelper;
+import com.xy.ithook.Util.HookHelper;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
@@ -633,7 +633,7 @@ const SETTINGS_STORAGE_KEY = 'java-editor-settings'
 // 常见类的导入映射表（全局定义，供自动导包和快速修复使用）
 const importMap: Record<string, string> = {
   // 工具类
-  'HookHelper': 'import com.xy.ithook.HookHelper;',
+  'HookHelper': 'import com.xy.ithook.Util.HookHelper;',
   'ActivityTaskManager': 'import com.xy.ithook.activity.ActivityTaskManager;',
   'ActivityTaskCallback': 'import com.xy.ithook.task.ActivityTaskCallback;',
   'ActivityTaskConfig': 'import com.xy.ithook.task.ActivityTaskConfig;',
