@@ -24,6 +24,9 @@ const form = ref({
 // 记录原始的 zip 版本号，用于检测是否需要提醒用户更新版本号
 const originalZipVersion = ref(0)
 
+// 自动递增版本号的设置（从 localStorage 读取）
+const autoIncrementZipVersion = ref(localStorage.getItem('autoIncrementZipVersion') === 'true')
+
 // Hook 配置列表
 type HookItem = {
   id: number
@@ -89,17 +92,26 @@ const confirmDialog = ref({
   show: false,
   title: '',
   message: '',
+  showAutoIncrementOption: false,
+  autoIncrementChecked: false,
   onConfirm: null as (() => void) | null,
   onCancel: null as (() => void) | null
 })
 
-function showConfirmDialog(title: string, message: string): Promise<boolean> {
+function showConfirmDialog(title: string, message: string, showAutoIncrementOption: boolean = false): Promise<boolean> {
   return new Promise((resolve) => {
     confirmDialog.value = {
       show: true,
       title,
       message,
+      showAutoIncrementOption,
+      autoIncrementChecked: false,
       onConfirm: () => {
+        // 如果勾选了自动递增选项，保存到 localStorage
+        if (confirmDialog.value.showAutoIncrementOption && confirmDialog.value.autoIncrementChecked) {
+          localStorage.setItem('autoIncrementZipVersion', 'true')
+          autoIncrementZipVersion.value = true
+        }
         confirmDialog.value.show = false
         resolve(true)
       },
@@ -406,12 +418,20 @@ async function saveHook() {
   
   // 检查是否上传了新的 zip 文件但版本号没有改变
   if (zipFile.value && form.value.zipVersion === originalZipVersion.value) {
-    const shouldContinue = await showConfirmDialog(
-      '资源版本号提醒',
-      `检测到您上传了新的资源文件，但版本号仍为 ${form.value.zipVersion}。\n\n客户端会根据版本号判断是否需要更新资源。建议修改资源版本号，否则客户端可能不会更新资源。\n\n是否继续保存而不修改版本号？`
-    )
-    if (!shouldContinue) {
-      return
+    // 如果启用了自动递增，直接递增版本号
+    if (autoIncrementZipVersion.value) {
+      form.value.zipVersion = originalZipVersion.value + 1
+      showToast(`资源版本号已自动递增至 ${form.value.zipVersion}`, 'success')
+    } else {
+      // 否则显示提醒对话框
+      const shouldContinue = await showConfirmDialog(
+        '资源版本号提醒',
+        `检测到您上传了新的资源文件，但版本号仍为 ${form.value.zipVersion}。\n\n客户端会根据版本号判断是否需要更新资源。建议修改资源版本号，否则客户端可能不会更新资源。\n\n是否继续保存而不修改版本号？`,
+        true  // 显示自动递增选项
+      )
+      if (!shouldContinue) {
+        return
+      }
     }
   }
   
@@ -487,6 +507,15 @@ function showToast(message: string, type: 'success' | 'error') {
   setTimeout(() => {
     toast.value.show = false
   }, 2000)
+}
+
+function toggleAutoIncrement() {
+  autoIncrementZipVersion.value = !autoIncrementZipVersion.value
+  localStorage.setItem('autoIncrementZipVersion', autoIncrementZipVersion.value.toString())
+  showToast(
+    autoIncrementZipVersion.value ? '已启用自动递增版本号' : '已禁用自动递增版本号',
+    'success'
+  )
 }
 
 function cancel() {
@@ -900,8 +929,21 @@ onUnmounted(() => {
       <!-- Zip 资源包 -->
       <div class="settings-section">
         <div class="section-header">
-          <h2 class="section-title">Zip 资源包</h2>
-          <p class="section-desc">上传资源包文件</p>
+          <div>
+            <h2 class="section-title">Zip 资源包</h2>
+            <p class="section-desc">上传资源包文件</p>
+          </div>
+          <button 
+            @click="toggleAutoIncrement"
+            class="btn-cache-toggle-large" 
+            :class="{ 'active': autoIncrementZipVersion }"
+            :title="autoIncrementZipVersion ? '已启用自动递增版本号' : '点击启用自动递增版本号'"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clip-rule="evenodd" />
+            </svg>
+            <span>自动递增版本号</span>
+          </button>
         </div>
         <div class="section-body">
           <div class="form-group">
@@ -1007,6 +1049,16 @@ onUnmounted(() => {
             </div>
             <div class="dialog-body">
               <p class="dialog-message">{{ confirmDialog.message }}</p>
+              <div v-if="confirmDialog.showAutoIncrementOption" class="dialog-option">
+                <label class="dialog-checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    v-model="confirmDialog.autoIncrementChecked" 
+                    class="dialog-checkbox"
+                  />
+                  <span class="checkbox-text">下次自动递增版本号，不再提示</span>
+                </label>
+              </div>
             </div>
             <div class="dialog-footer">
               <button @click="confirmDialog.onCancel?.()" class="dialog-btn dialog-btn-cancel">
@@ -2600,6 +2652,56 @@ onUnmounted(() => {
   
   .dialog-btn-confirm {
     background: linear-gradient(135deg, #fbbf24, #fb923c);
+  }
+}
+
+/* 对话框选项样式 */
+.dialog-option {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.dialog-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.dialog-checkbox-label:hover {
+  background: rgba(79, 70, 229, 0.05);
+}
+
+.dialog-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--brand);
+  flex-shrink: 0;
+}
+
+.checkbox-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .dialog-option {
+    border-top-color: rgba(255, 255, 255, 0.08);
+  }
+  
+  .dialog-checkbox-label:hover {
+    background: rgba(124, 58, 237, 0.1);
+  }
+  
+  .checkbox-text {
+    color: var(--text-1-dark);
   }
 }
 </style>

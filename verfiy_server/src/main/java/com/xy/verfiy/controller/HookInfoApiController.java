@@ -47,6 +47,7 @@ public class HookInfoApiController {
             body.put("success", true);
             body.put("data", info.getData());
             body.put("dexData", info.getDexData());
+            body.put("zipVersion", info.getZipVersion());
             return makeResponse(app, secret, ResponseEntity.ok(body));
         });
     }
