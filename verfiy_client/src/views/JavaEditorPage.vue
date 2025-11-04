@@ -298,7 +298,7 @@ const fileTree = ref<FileNode>({
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【6】HookHelper 工具类（内置）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-包名：com.xy.ithook.Util.HookHelper
+包名：com.xy.ithook.HookHelper
 说明：内置工具类，提供常用的 Hook 辅助方法
 注意：此类不会被编译到 Dex 文件中
 
@@ -316,7 +316,7 @@ Getter 方法（常用）：
   • HookHelper.getModulePath()         - 获取模块路径
   • HookHelper.getCurrentlyActivity()  - 获取当前 Activity
 示例：
-  import com.xy.ithook.Util.HookHelper;
+  import com.xy.ithook.HookHelper;
   
   // 获取常用对象
   ClassLoader cl = HookHelper.getHostClassLoader();
@@ -380,7 +380,7 @@ Getter 方法（常用）：
 
 import android.content.Context;
 import android.widget.Toast;
-import com.xy.ithook.Util.HookHelper;
+import com.xy.ithook.HookHelper;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
@@ -495,182 +495,13 @@ public class MyHook {
               path: 'src/com/xy/ithook',
               expanded: false,
               protected: true,
-              children: [
-                {
-                  name: 'Util',
-                  type: 'folder',
-                  path: 'src/com/xy/ithook/Util',
-                  expanded: false,
-                  protected: true,
-                  children: [
-                    {
-                      name: 'HookHelper.java',
-                      type: 'file',
-                      path: 'src/com/xy/ithook/Util/HookHelper.java',
-                      protected: true,
-                      content: `package com.xy.ithook.Util;
-
-import android.content.Context;
-import android.content.pm.PackageManager;
-import android.content.res.XModuleResources;
-import android.provider.Settings;
-import android.text.TextUtils;
-import android.app.Activity;
-import java.lang.ref.WeakReference;
-import java.util.UUID;
-import java.io.File;
-import de.robv.android.xposed.callbacks.XC_LoadPackage;
-
-
-public class HookHelper {
-    private static ClassLoader moduleClassLoader;
-    private static ClassLoader hostClassLoader;
-    private static String modulePath;
-    private static WeakReference<Context> moduleContextRef;
-    private static WeakReference<Context> hostContextRef;
-    private static String versionName;
-    private static File resHook;
-    private static int versionCode;
-    private static XC_LoadPackage.LoadPackageParam loadPackageParam;
-    private static XModuleResources moduleResources;
-    private static String packageName;
-    private static WeakReference<Activity> currentlyActivity;
-
-    public static Activity getCurrentlyActivity() {
-        return currentlyActivity.get();
-    }
-
-    public static void setCurrentlyActivity(Activity activity) {
-        currentlyActivity = activity == null ? null : new WeakReference<>(activity);
-    }
-
-    public static String getPackageName() {
-        return packageName;
-    }
-
-    public static void setPackageName(String packageName) {
-        HookHelper.packageName = packageName;
-    }
-
-    public static XModuleResources getModuleResources() {
-        return moduleResources;
-    }
-    public static Context getModuleContext() {
-        if (moduleContextRef.get() != null) {
-            return moduleContextRef.get();
-        }
-        if (hostContextRef.get() == null) {
-            return null;
-        }
-        try {
-            Context context = hostContextRef.get().createPackageContext(
-                   "com.xy.ithook",
-                    Context.CONTEXT_IGNORE_SECURITY | Context.CONTEXT_INCLUDE_CODE
-            );
-            setModuleContext(context);
-            return context;
-        } catch (PackageManager.NameNotFoundException e) {
-            return null;
-        }
-    }
-    public static void setModuleResources(XModuleResources moduleResources) {
-        HookHelper.moduleResources = moduleResources;
-    }
-
-    public static String getVersionName() {
-        return versionName;
-    }
-
-    public static void setVersionName(String versionName) {
-        HookHelper.versionName = versionName;
-    }
-
-    public static int getVersionCode() {
-        return versionCode;
-    }
-
-    public static void setVersionCode(int versionCode) {
-        HookHelper.versionCode = versionCode;
-    }
-
-    public static XC_LoadPackage.LoadPackageParam getLoadPackageParam() {
-        return loadPackageParam;
-    }
-
-    public static void setLoadPackageParam(XC_LoadPackage.LoadPackageParam loadPackageParam) {
-        HookHelper.loadPackageParam = loadPackageParam;
-    }
-
-    public static String getAndroidId(){
-        try {
-            if (HookHelper.getHostContext() != null) {
-                String androidId = Settings.Secure.getString(
-                        HookHelper.getHostContext().getContentResolver(),
-                        Settings.Secure.ANDROID_ID);
-                if (!TextUtils.isEmpty(androidId)) {
-                    return androidId;
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return UUID.randomUUID().toString();
-    }
-    public static String getModulePath() {
-        return modulePath;
-    }
-
-    public static void setModulePath(String modulePath) {
-        HookHelper.modulePath = modulePath;
-    }
-
-    public static File getResFile(){
-        if(resHook==null){
-            return new File(getHostContext().getFilesDir(), "resHook.zip");
-        }
-        return resHook;
-    }
-
-    public static void setModuleContext(Context moduleContext) {
-        moduleContextRef = moduleContext == null ? null : new WeakReference<>(moduleContext);
-    }
-
-    public static Context getHostContext() {
-        return hostContextRef == null ? null : hostContextRef.get();
-    }
-
-    public static void setHostContext(Context hostContext) {
-        hostContextRef = hostContext == null ? null : new WeakReference<>(hostContext);
-    }
-
-
-
-
-    public static ClassLoader getHostClassLoader() {
-        return hostClassLoader;
-    }
-
-    public static void setHostClassLoader(ClassLoader hostClassLoader) {
-        HookHelper.hostClassLoader = hostClassLoader;
-    }
-
-    public static void setModuleClassLoader(ClassLoader classLoader){
-        moduleClassLoader=classLoader;
-    }
-    public static ClassLoader getModuleClassLoader(){
-        return moduleClassLoader;
-    }
-}
-`
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
+              children: []
             }
           ]
         }
       ]
+    }
+  ]
     }
   ]
 })
@@ -802,7 +633,10 @@ const SETTINGS_STORAGE_KEY = 'java-editor-settings'
 // 常见类的导入映射表（全局定义，供自动导包和快速修复使用）
 const importMap: Record<string, string> = {
   // 工具类
-  'HookHelper': 'import com.xy.ithook.Util.HookHelper;',
+  'HookHelper': 'import com.xy.ithook.HookHelper;',
+  'ActivityTaskManager': 'import com.xy.ithook.activity.ActivityTaskManager;',
+  'ActivityTaskCallback': 'import com.xy.ithook.task.ActivityTaskCallback;',
+  'ActivityTaskConfig': 'import com.xy.ithook.task.ActivityTaskConfig;',
   
   // Xposed
   'XC_MethodHook': 'import de.robv.android.xposed.XC_MethodHook;',
@@ -2074,8 +1908,7 @@ onMounted(async () => {
   
   // 无论是否加载了缓存，都要确保受保护的文件内容使用初始值，不使用缓存
   const protectedFiles = [
-    '依赖说明.txt',
-    'src/com/xy/ithook/Util/HookHelper.java'
+    '依赖说明.txt'
   ]
   
   protectedFiles.forEach(filePath => {
@@ -2153,6 +1986,13 @@ onMounted(async () => {
             kind: monaco.languages.CompletionItemKind.Method,
             insertText: 'HookHelper.getCurrentlyActivity()',
             documentation: '获取应用当前的 Activity',
+            range: null as any
+          },
+          {
+            label: 'HookHelper.getResFile',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'HookHelper.getResFile()',
+            documentation: '获取应用当前的资源文件',
             range: null as any
           },
           {
@@ -2298,6 +2138,90 @@ onMounted(async () => {
             insertText: 'HookHelper.setModulePath(${1:modulePath})',
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             documentation: '设置模块路径',
+            range: null as any
+          },
+          
+          // === ActivityTaskManager (Activity 任务管理器) ===
+          {
+            label: 'ActivityTaskManager',
+            kind: monaco.languages.CompletionItemKind.Class,
+            insertText: 'ActivityTaskManager',
+            documentation: 'Activity 任务管理器，负责在特定 Activity 进入前台时触发回调',
+            range: null as any
+          },
+          {
+            label: 'ActivityTaskManager.submitTask (callback)',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'ActivityTaskManager.submitTask(new ActivityTaskCallback() {\n\t@Override\n\tpublic void onActivityReady(Activity activity, ActivityTaskManager.ActivityTask task) {\n\t\t${1:// 当任何 Activity 进入前台时执行}\n\t}\n})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '提交一个任务，监听任何 Activity 进入前台时触发回调',
+            range: null as any
+          },
+          {
+            label: 'ActivityTaskManager.submitTask (activityName, callback)',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'ActivityTaskManager.submitTask("${1:com.example.MainActivity}", new ActivityTaskCallback() {\n\t@Override\n\tpublic void onActivityReady(Activity activity, ActivityTaskManager.ActivityTask task) {\n\t\t${2:// 当指定 Activity 进入前台时执行}\n\t}\n})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '提交一个任务，监听指定 Activity 进入前台时触发回调',
+            range: null as any
+          },
+          {
+            label: 'ActivityTaskManager.submitTask (activityName, callback, payload)',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'ActivityTaskManager.submitTask("${1:com.example.MainActivity}", new ActivityTaskCallback() {\n\t@Override\n\tpublic void onActivityReady(Activity activity, ActivityTaskManager.ActivityTask task) {\n\t\t${2:// 使用 task.getPayload() 获取额外数据}\n\t}\n}, ${3:payloadObject})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '提交一个任务，带额外数据负载',
+            range: null as any
+          },
+          {
+            label: 'ActivityTaskManager.submitTask (config)',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'ActivityTaskManager.submitTask(${1:activityTaskConfig})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '提交一个 Activity 任务配置',
+            range: null as any
+          },
+          {
+            label: 'ActivityTaskManager.cancelTask',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'ActivityTaskManager.cancelTask("${1:taskId}")',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: '取消指定的任务',
+            range: null as any
+          },
+          {
+            label: 'ActivityTaskManager.cancelAllTasks',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'ActivityTaskManager.cancelAllTasks()',
+            documentation: '取消所有等待中的任务',
+            range: null as any
+          },
+          {
+            label: 'ActivityTaskManager.getPendingTaskIds',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'ActivityTaskManager.getPendingTaskIds()',
+            documentation: '获取等待中的任务列表',
+            range: null as any
+          },
+          {
+            label: 'ActivityTaskManager.getPendingTaskCount',
+            kind: monaco.languages.CompletionItemKind.Method,
+            insertText: 'ActivityTaskManager.getPendingTaskCount()',
+            documentation: '获取等待中的任务数量',
+            range: null as any
+          },
+          {
+            label: 'ActivityTaskCallback',
+            kind: monaco.languages.CompletionItemKind.Interface,
+            insertText: 'ActivityTaskCallback',
+            documentation: 'Activity 任务回调接口',
+            range: null as any
+          },
+          {
+            label: 'ActivityTaskConfig',
+            kind: monaco.languages.CompletionItemKind.Class,
+            insertText: 'ActivityTaskConfig',
+            documentation: 'Activity 任务配置类',
             range: null as any
           },
           
