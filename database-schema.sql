@@ -20,6 +20,8 @@ CREATE TABLE `users` (
   `password` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '密码（加密）',
   `enabled` tinyint(1) DEFAULT '1' COMMENT '是否启用',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `can_invite` tinyint(1) DEFAULT '0' COMMENT '是否有邀请权限',
+  `invite_quota` int DEFAULT '0' COMMENT '邀请配额（-1表示无限制）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
@@ -39,6 +41,7 @@ CREATE TABLE `application` (
   `announcement` text COLLATE utf8mb4_unicode_ci COMMENT '公告内容',
   `version` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '版本号',
   `changelog` text COLLATE utf8mb4_unicode_ci COMMENT '更新日志',
+  `update_url` varchar(512) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '更新下载链接',
   `encryption_alg` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '加密算法（RC4/AES-128-CBC/AES-256-CBC）',
   `redeem_extra` text COLLATE utf8mb4_unicode_ci COMMENT '自定义返回参数（JSON）',
   `api_key` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'API密钥',
@@ -60,21 +63,19 @@ CREATE TABLE `hook_info` (
   `version` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '*' COMMENT '版本号，* 表示通配',
   `enabled` tinyint(1) NOT NULL DEFAULT '1' COMMENT '是否启用',
   `data` longtext COLLATE utf8mb4_unicode_ci COMMENT 'Hook 配置数据(JSON)',
-  `dex_data` longtext COLLATE utf8mb4_unicode_ci COMMENT 'Dex 数据（Base64/Hex）',
-  `zip_data` longtext COLLATE utf8mb4_unicode_ci COMMENT '资源压缩包（Base64/Hex）',
+  `dex_data` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Dex 文件路径（相对于存储根目录）',
+  `dex_hash` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Dex文件的SHA-256哈希值',
+  `zip_data` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Zip 文件路径（相对于存储根目录）',
   `zip_version` int DEFAULT '0' COMMENT '资源版本号',
-
-
-  `require_card_verification` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否需要卡密验证',
-
-  
   `created_by` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '创建人',
   `updated_by` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '更新人',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `require_card_verification` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否需要卡密验证',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_app_pkg_ver` (`app_id`,`package_name`,`version`),
   KEY `idx_app_id` (`app_id`),
+  KEY `idx_dex_hash` (`dex_hash`),
   CONSTRAINT `fk_hook_app` FOREIGN KEY (`app_id`) REFERENCES `application` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Hook 配置表';
 
@@ -155,20 +156,42 @@ CREATE TABLE `notice` (
 
 
 -- ----------------------------
--- 邀请表: invite_codes (公告表)
+-- 表结构: invite_codes (邀请码表)
 -- ----------------------------
 DROP TABLE IF EXISTS `invite_codes`;
-CREATE TABLE invite_codes (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  code VARCHAR(64) NOT NULL UNIQUE,
-  created_by VARCHAR(64) NOT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  used TINYINT(1) NOT NULL DEFAULT 0,
-  used_by VARCHAR(64) DEFAULT NULL,
-  used_at DATETIME DEFAULT NULL,
-  can_invite TINYINT(1) DEFAULT 0 COMMENT '新用户是否有邀请权限',
-  invite_quota INT DEFAULT 0 COMMENT '新用户的邀请配额（-1表示无限制）'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE `invite_codes` (
+  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+  `code` VARCHAR(64) NOT NULL UNIQUE COMMENT '邀请码',
+  `created_by` VARCHAR(64) NOT NULL COMMENT '创建者',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `used` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已使用',
+  `used_by` VARCHAR(64) DEFAULT NULL COMMENT '使用者',
+  `used_at` DATETIME DEFAULT NULL COMMENT '使用时间',
+  `can_invite` TINYINT(1) DEFAULT 0 COMMENT '新用户是否有邀请权限',
+  `invite_quota` INT DEFAULT 0 COMMENT '新用户的邀请配额（-1表示无限制）'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='邀请码表';
+
+-- ----------------------------
+-- 表结构: dex_compile_task (Dex 编译任务表)
+-- ----------------------------
+DROP TABLE IF EXISTS `dex_compile_task`;
+CREATE TABLE `dex_compile_task` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `task_id` VARCHAR(64) NOT NULL COMMENT '任务ID',
+  `user_id` BIGINT DEFAULT NULL COMMENT '用户ID',
+  `java_code` TEXT NOT NULL COMMENT 'Java 源代码',
+  `dex_file_path` VARCHAR(512) DEFAULT NULL COMMENT 'Dex 文件路径',
+  `compile_log` TEXT COMMENT '编译日志',
+  `success` TINYINT(1) DEFAULT '0' COMMENT '是否编译成功',
+  `downloaded` TINYINT(1) DEFAULT '0' COMMENT '是否已下载',
+  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `task_id` (`task_id`),
+  KEY `idx_task_id` (`task_id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Dex 编译任务表';
 
 -- ----------------------------
 -- 创建默认管理员账户
@@ -181,18 +204,18 @@ INSERT INTO `users` (`username`, `password`, `enabled`) VALUES
 
 SET FOREIGN_KEY_CHECKS = 1;
 
--- 完成提示
-SELECT '数据库初始化完成！' AS message;
-SELECT '默认管理员账户 - 用户名: admin, 密码: admin123 (请务必修改!)' AS notice;
--- 添加用户邀请权限和配额字段
-
--- 如果字段已存在会报错，可以忽略错误继续执行
-
-ALTER TABLE users ADD COLUMN can_invite BOOLEAN DEFAULT FALSE;
-ALTER TABLE users ADD COLUMN invite_quota INT DEFAULT 0;
-
 -- 给 admin 用户默认的邀请权限（无限配额）
 UPDATE users SET can_invite = TRUE, invite_quota = -1 WHERE username = 'admin';
+
+-- 完成提示
+SELECT '====================================================================' AS '';
+SELECT '✓ 数据库初始化完成！' AS message;
+SELECT '====================================================================' AS '';
+SELECT '默认管理员账户：' AS '';
+SELECT '  用户名: admin' AS '';
+SELECT '  密码: admin123' AS '';
+SELECT '  ⚠️  请在首次登录后立即修改密码！' AS '';
+SELECT '====================================================================' AS '';
 
 
 
