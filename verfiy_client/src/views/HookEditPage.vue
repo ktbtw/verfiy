@@ -410,6 +410,25 @@ async function fileToBase64(file: File): Promise<string> {
   })
 }
 
+async function calculateFileSHA256(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = async () => {
+      try {
+        const arrayBuffer = reader.result as ArrayBuffer
+        const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer)
+        const hashArray = Array.from(new Uint8Array(hashBuffer))
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+        resolve(hashHex)
+      } catch (e) {
+        reject(e)
+      }
+    }
+    reader.onerror = reject
+    reader.readAsArrayBuffer(file)
+  })
+}
+
 async function saveHook() {
   if (!form.value.packageName.trim()) {
     showToast('请输入包名', 'error')
@@ -476,10 +495,12 @@ async function saveHook() {
       data: JSON.stringify(hookData)
     }
     
-    // Dex 文件直接作为 dexData 字段（Base64 字符串）
+    // Dex 文件：计算哈希并上传 Base64
     if (dexFile.value) {
       const dexBase64 = await fileToBase64(dexFile.value)
+      const dexHash = await calculateFileSHA256(dexFile.value)
       payload.dexData = dexBase64
+      payload.dexHash = dexHash
     }
     
     // Zip 文件直接作为 zipData 字段（Base64 字符串）

@@ -46,7 +46,7 @@ public class HookInfoApiController {
             Map<String, Object> body = new HashMap<>();
             body.put("success", true);
             body.put("data", info.getData());
-            body.put("dexData", info.getDexData());
+            body.put("dexHash", info.getDexHash());
             body.put("zipVersion", info.getZipVersion());
             return makeResponse(app, secret, ResponseEntity.ok(body));
         });
@@ -64,6 +64,22 @@ public class HookInfoApiController {
             body.put("success", true);
             body.put("zipData", info.getZipData());
             body.put("zipVersion", info.getZipVersion());
+            return makeResponse(app, secret, ResponseEntity.ok(body));
+        });
+    }
+
+    @GetMapping("/dex")
+    public ResponseEntity<Map<String, Object>> getHookDex(@RequestHeader(value = "X-API-Key", required = false) String apiKey,
+                                                          @RequestHeader(value = "X-Timestamp", required = false) String ts,
+                                                          @RequestHeader(value = "X-Sign", required = false) String sign,
+                                                          @RequestParam("packageName") String packageName,
+                                                          @RequestParam(value = "version", required = false) String version,
+                                                          @RequestParam(value = "deviceId", required = false) String deviceId) {
+        return processHookRequest(apiKey, ts, sign, packageName, version, deviceId, true, (app, secret, info) -> {
+            Map<String, Object> body = new HashMap<>();
+            body.put("success", true);
+            body.put("dexData", info.getDexData());
+            body.put("dexHash", info.getDexHash());
             return makeResponse(app, secret, ResponseEntity.ok(body));
         });
     }

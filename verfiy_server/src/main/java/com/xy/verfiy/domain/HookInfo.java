@@ -11,6 +11,7 @@ public class HookInfo {
     private Boolean enabled;
     private String data;
     private String dexData;
+    private String dexHash;
     private String zipData;
     private Integer zipVersion;
     private Boolean requireCardVerification;
@@ -73,6 +74,14 @@ public class HookInfo {
 
     public void setDexData(String dexData) {
         this.dexData = dexData;
+    }
+
+    public String getDexHash() {
+        return dexHash;
+    }
+
+    public void setDexHash(String dexHash) {
+        this.dexHash = dexHash;
     }
 
     public String getZipData() {
